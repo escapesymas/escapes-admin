@@ -66,18 +66,44 @@ const SyncTab = () => {
   const controlImagesDownloader = async (action: 'start' | 'stop' | 'restart') => {
     setControllingImages(action);
     try {
-      const res = await fetch('/api/bihr/sync-images/control', {
+      const res = await fetch('/api/bihr/sync-images-v2/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
         },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ batch: 50, concurrency: 8, dryRun: false })
       });
       if (res.ok) {
-        showToast(`Acción "${action}" enviada correctamente al descargador de imágenes.`);
+        showToast(`Descargador de imágenes iniciado en segundo plano.`);
       } else {
-        showToast(`Error al enviar acción "${action}"`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Error: ${err.error || res.statusText}`, 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Error de conexión.', 'error');
+    } finally {
+      setControllingImages(null);
+      fetchSyncStatus();
+    }
+  };
+
+  const stopImagesDownloader = async () => {
+    setControllingImages('stop');
+    try {
+      const res = await fetch('/api/bihr/sync-images-v2/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
+        }
+      });
+      if (res.ok) {
+        showToast(`Señal de parada enviada al descargador.`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Error: ${err.error || res.statusText}`, 'error');
       }
     } catch (e) {
       console.error(e);
@@ -268,7 +294,7 @@ const SyncTab = () => {
                   : 'bg-[#1a1b1e] text-tech-muted border-tech-border'
               }`}
             >
-              PM2: {images.pm2Status?.toUpperCase() || 'STOPPED'}
+              {images.running ? 'PROCESO ACTIVO' : 'INACTIVO'}
             </span>
             <span
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
@@ -365,7 +391,7 @@ const SyncTab = () => {
           ) : (
             <>
               <button
-                onClick={() => controlImagesDownloader('stop')}
+                onClick={() => stopImagesDownloader()}
                 disabled={controllingImages !== null}
                 className="flex-1 min-w-[160px] bg-red-950/20 hover:bg-red-950/40 disabled:bg-tech-card border border-red-900/30 text-red-500 py-3.5 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center justify-center gap-2"
               >
