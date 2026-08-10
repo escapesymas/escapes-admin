@@ -66,13 +66,13 @@ const SyncTab = () => {
   const controlImagesDownloader = async (action: 'start' | 'stop' | 'restart') => {
     setControllingImages(action);
     try {
-      const res = await fetch('/api/bihr/sync-images-v3/start', {
+      const res = await fetch('/api/bihr/sync-images-v4/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
         },
-        body: JSON.stringify({ batch: 5000, concurrency: 10 })
+        body: JSON.stringify({ batch: 5000, concurrency: 20, loopAll: true })
       });
       if (res.ok) {
         showToast(`Descargador de imágenes iniciado en segundo plano.`);
