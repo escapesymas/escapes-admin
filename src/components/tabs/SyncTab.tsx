@@ -1,20 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 
 /**
  * SyncTab — Consola de Sincronización del Catálogo Bihr
- * 
+ *
  * Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.
- * Utiliza polling cada 2.5s contra /api/bihr/sync-status para mostrar el estado en tiempo real.
- * El estado de descarga de imágenes se lee desde la tabla `image_regen_state` en PostgreSQL.
+ * Polls /api/bihr/sync-status every 1.5s while running so the operator can
+ * watch throughput, ETA, and the current SKU tick by in real time.
+ * The state is read from the `image_regen_state` table in PostgreSQL.
  */
+const POLL_MS_RUNNING = 1500;
+const POLL_MS_IDLE = 5000;
+
+/** Format a number of seconds into a compact ETA string (e.g. "12m 34s", "1h 5m"). */
+function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 const SyncTab = () => {
   const { showToast } = useToast();
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [triggeringCatalog, setTriggeringCatalog] = useState<string | null>(null);
   const [controllingImages, setControllingImages] = useState<string | null>(null);
+  const prevSnapshotRef = useRef<{ processed: number; ts: number } | null>(null);
+  const [throughput, setThroughput] = useState<number>(0);
+  const [tick, setTick] = useState(0);
 
   const fetchSyncStatus = async () => {
     try {
@@ -24,6 +43,17 @@ const SyncTab = () => {
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
+
+        const processed = data?.images?.processed ?? 0;
+        const now = Date.now();
+        const prev = prevSnapshotRef.current;
+        if (prev && processed > prev.processed) {
+          const elapsed = (now - prev.ts) / 1000;
+          if (elapsed > 0) {
+            setThroughput((processed - prev.processed) / elapsed);
+          }
+        }
+        prevSnapshotRef.current = { processed, ts: now };
       }
     } catch (e) {
       console.error('[FETCH SYNC STATUS ERROR]:', e);
@@ -34,9 +64,17 @@ const SyncTab = () => {
 
   useEffect(() => {
     fetchSyncStatus();
-    const interval = setInterval(fetchSyncStatus, 2500);
+    let interval: ReturnType<typeof setInterval>;
+    const setupInterval = () => {
+      const ms = status?.images?.running ? POLL_MS_RUNNING : POLL_MS_IDLE;
+      interval = setInterval(() => {
+        fetchSyncStatus();
+        setTick((t) => t + 1);
+      }, ms);
+    };
+    setupInterval();
     return () => clearInterval(interval);
-  }, []);
+  }, [status?.images?.running]);
 
   const triggerCatalogSync = async (type: 'HardPart' | 'RiderGear' | 'Prices') => {
     setTriggeringCatalog(type);
@@ -315,17 +353,20 @@ const SyncTab = () => {
         {/* Image Download progress */}
         {images.status === 'running' && (
           <div className="space-y-3 bg-[#1a1b1e]/40 p-4 rounded-xl border border-tech-border/40 animate-fade-in">
-            <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-[#cbd5e1]">
-              <span>Progreso de Imágenes</span>
-              <span className="text-tech-yellow">{imagesProgress}%</span>
+            <div className="flex justify-between items-baseline text-xs font-bold uppercase tracking-wider text-[#cbd5e1]">
+              <span className="flex items-center gap-2">
+                <Icons.Radio className="w-3 h-3 text-green-400 animate-pulse" />
+                Progreso de Imágenes (live · refresco {POLL_MS_RUNNING / 1000}s)
+              </span>
+              <span className="text-tech-yellow font-mono">{imagesProgress}%</span>
             </div>
             <div className="w-full bg-[#1a1b1e] h-2 rounded-full overflow-hidden border border-tech-border">
-              <div 
+              <div
                 className="bg-gradient-to-r from-orange-600 to-tech-yellow h-full rounded-full transition-all duration-300"
                 style={{ width: `${imagesProgress}%` }}
               />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-2 text-[10px] uppercase font-bold text-tech-muted">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 pt-2 text-[10px] uppercase font-bold text-tech-muted">
               <div>
                 <span>Descargando:</span>
                 <span className="block text-tech-text mt-0.5 truncate max-w-[120px] font-mono" title={images.current_sku}>
@@ -334,19 +375,45 @@ const SyncTab = () => {
               </div>
               <div>
                 <span>Procesadas:</span>
-                <span className="block text-tech-text mt-0.5">{images.processed} / {images.total}</span>
+                <span className="block text-tech-text mt-0.5 font-mono">{images.processed.toLocaleString()} / {images.total.toLocaleString()}</span>
+              </div>
+              <div>
+                <span>Velocidad:</span>
+                <span className="block text-tech-yellow mt-0.5 font-mono">
+                  {throughput > 0 ? `${throughput.toFixed(1)}/s` : '—'}
+                </span>
+              </div>
+              <div>
+                <span>Tiempo Restante:</span>
+                <span className="block text-tech-text mt-0.5 font-mono">
+                  {throughput > 0 && images.total > images.processed
+                    ? formatEta((images.total - images.processed) / throughput)
+                    : '—'}
+                </span>
               </div>
               <div>
                 <span>Descargadas:</span>
-                <span className="block text-green-400 mt-0.5 font-bold">{images.success}</span>
-              </div>
-              <div>
-                <span>Omitidas (Existentes):</span>
-                <span className="block text-[#cbd5e1] mt-0.5 font-bold">{images.skipped}</span>
+                <span className="block text-green-400 mt-0.5 font-bold font-mono">{images.success.toLocaleString()}</span>
               </div>
               <div>
                 <span>Fallidas:</span>
-                <span className="block text-red-500 mt-0.5 font-bold">{images.failed}</span>
+                <span className="block text-red-500 mt-0.5 font-bold font-mono">{images.failed.toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 text-[10px] uppercase font-bold text-tech-muted border-t border-tech-border/40 mt-2">
+              <div>
+                <span>Omitidas (Sin imagen en catálogo):</span>
+                <span className="block text-[#cbd5e1] mt-0.5 font-bold font-mono">{images.skipped.toLocaleString()}</span>
+              </div>
+              <div>
+                <span>PID Proceso:</span>
+                <span className="block text-tech-text mt-0.5 font-mono">{images.pid ?? '—'}</span>
+              </div>
+              <div>
+                <span>Última Actualización:</span>
+                <span className="block text-tech-text mt-0.5 font-mono">
+                  {images.updated_at ? new Date(images.updated_at).toLocaleTimeString('es-ES') : '—'}
+                </span>
               </div>
             </div>
           </div>
