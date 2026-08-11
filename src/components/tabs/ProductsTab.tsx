@@ -3,6 +3,7 @@ import * as Icons from 'lucide-react';
 import { AttributesManager } from './AttributesManager';
 import { TaxonomiesTab } from './TaxonomiesTab';
 import { formatPrice } from '../../utils/format';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Product, ProductImage, ProductCompatibilityEntry, Category } from '../../types/admin';
 
 interface ProductsTabProps {
@@ -11,11 +12,16 @@ interface ProductsTabProps {
   hasMoreProducts: boolean;
   productSearch: string;
   productPage: number;
+  productTotal: number;
+  productSort: string;
+  productOrder: 'ASC' | 'DESC';
   setProductSearch: (v: string) => void;
   setProductPage: (v: number) => void;
+  setProductSort: (v: string) => void;
+  setProductOrder: (v: 'ASC' | 'DESC') => void;
   setEditingProduct: (p: Product | null) => void;
   setShowProductForm: (v: 'create' | 'edit' | null) => void;
-  fetchProductsList: (search: string, page: number, append: boolean, isSilent?: boolean, filters?: Record<string, string>) => Promise<void>;
+  fetchProductsList: (search: string, page: number, append: boolean, isSilent?: boolean, filters?: Record<string, string>, sort?: string, order?: 'ASC' | 'DESC') => Promise<void>;
   handleDeleteProduct: (id: number) => Promise<void>;
   userId: string;
   adminEmail: string;
@@ -57,8 +63,13 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   hasMoreProducts,
   productSearch,
   productPage,
+  productTotal,
+  productSort,
+  productOrder,
   setProductSearch,
   setProductPage,
+  setProductSort,
+  setProductOrder,
   setEditingProduct,
   setShowProductForm,
   fetchProductsList,
@@ -72,6 +83,19 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [categoryMap, setCategoryMap] = useState<Record<number, string>>({});
+
+  const debouncedSearch = useDebouncedValue(productSearch, 300);
+  const [isSearchStale, setIsSearchStale] = useState(false);
+  useEffect(() => {
+    if (debouncedSearch !== productSearch) {
+      setIsSearchStale(true);
+      return;
+    }
+    setIsSearchStale(false);
+    setProductPage(1);
+    fetchProductsList(debouncedSearch, 1, false, true, undefined, productSort, productOrder);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, productSort, productOrder]);
 
   useEffect(() => {
     if (!adminToken) return;
@@ -108,14 +132,14 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   const applyFilters = () => {
     setProductPage(1);
     const active = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
-    fetchProductsList(productSearch, 1, false, false, active);
+    fetchProductsList(productSearch, 1, false, false, active, productSort, productOrder);
   };
 
   const clearFilters = () => {
     const cleared = Object.fromEntries(Object.keys(filters).map(k => [k, '']));
     setFilters(cleared);
     setProductPage(1);
-    fetchProductsList(productSearch, 1, false);
+    fetchProductsList(productSearch, 1, false, false, undefined, productSort, productOrder);
   };
 
   const handleSelectCategoryFromTaxonomies = (cat: Category) => {
@@ -129,7 +153,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
     setSubTab('catalog');
     setShowFilters(true);
     setProductPage(1);
-    fetchProductsList(productSearch, 1, false, false, clearedFilters);
+    fetchProductsList(productSearch, 1, false, false, clearedFilters, productSort, productOrder);
   };
 
   const renderCell = (key: ColumnKey, p: Product): React.ReactNode => {
@@ -296,10 +320,12 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
             type="text"
             value={productSearch}
             onChange={(e) => setProductSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { setProductPage(1); fetchProductsList(e.currentTarget.value, 1, false, false, Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))); } }}
-            placeholder="Buscar por nombre, SKU o descripción..."
-            className="w-full bg-tech-card border border-tech-border rounded-xl pl-11 pr-4 py-3 text-xs text-tech-text placeholder-zinc-600 focus:outline-none focus:border-tech-yellow transition-all shadow-inner"
+            placeholder="Buscar por nombre, SKU o descripción… (búsqueda automática)"
+            className="w-full bg-tech-card border border-tech-border rounded-xl pl-11 pr-10 py-3 text-xs text-tech-text placeholder-zinc-600 focus:outline-none focus:border-tech-yellow transition-all shadow-inner"
           />
+          {isSearchStale && (
+            <Icons.Loader2 className="absolute right-4 top-3.5 w-4 h-4 text-tech-yellow animate-spin" />
+          )}
         </div>
 
         <button
@@ -312,6 +338,33 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
             <span className="w-2 h-2 rounded-full bg-tech-yellow animate-pulse" />
           )}
         </button>
+
+        <div className="flex items-center gap-1 bg-tech-card border border-tech-border rounded-xl px-3 py-2">
+          <Icons.ArrowDownUp size={14} className="text-tech-muted" />
+          <select
+            value={productSort}
+            onChange={(e) => setProductSort(e.target.value)}
+            className="bg-transparent text-[10px] font-black uppercase tracking-widest text-tech-text outline-none cursor-pointer pr-1"
+            aria-label="Ordenar por"
+          >
+            <option value="created_at">Recientes</option>
+            <option value="name">Nombre</option>
+            <option value="brand">Marca</option>
+            <option value="sku">SKU</option>
+            <option value="price">Precio</option>
+            <option value="stock">Stock</option>
+            <option value="barcode">Cód. Barras</option>
+            <option value="supplier_code">Cód. Proveedor</option>
+          </select>
+          <button
+            onClick={() => setProductOrder(productOrder === 'ASC' ? 'DESC' : 'ASC')}
+            className="ml-1 px-2 py-1 rounded-lg text-[10px] font-black text-tech-yellow hover:bg-tech-yellow/10"
+            title={productOrder === 'ASC' ? 'Ascendente' : 'Descendente'}
+            aria-label="Cambiar dirección"
+          >
+            {productOrder === 'ASC' ? '↑' : '↓'}
+          </button>
+        </div>
 
         <div className="relative">
           <button
@@ -462,30 +515,47 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
         </div>
       </div>
 
-      {hasMoreProducts && (
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={async () => {
-              const nextPage = productPage + 1;
-              setProductPage(nextPage);
-              const active = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
-              await fetchProductsList(productSearch, nextPage, true, false, active);
-            }}
-            disabled={productsLoading}
-            className="bg-tech-card hover:bg-[#1a1b1e] border border-tech-border text-zinc-300 px-6 py-3.5 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
-          >
-            {productsLoading ? (
-              <>
-                <Icons.Loader2 className="w-4 h-4 animate-spin text-tech-yellow" />
-                Cargando productos...
-              </>
-            ) : (
-              <>
-                <Icons.ChevronDown className="w-4 h-4 text-tech-yellow" />
-                Cargar más productos
-              </>
-            )}
-          </button>
+      {productTotal > 0 && (
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 px-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-tech-muted">
+            Mostrando <span className="text-tech-text">{products.length}</span> de <span className="text-tech-text">{productTotal || '…'}</span> productos
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const prevPage = Math.max(1, productPage - 1);
+                setProductPage(prevPage);
+                const active = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
+                await fetchProductsList(productSearch, prevPage, false, false, active, productSort, productOrder);
+              }}
+              disabled={productPage <= 1 || productsLoading}
+              className="bg-tech-card hover:bg-[#1a1b1e] border border-tech-border text-zinc-300 px-3 py-2 rounded-lg text-[10px] font-black uppercase italic tracking-wider transition-all flex items-center gap-1 disabled:opacity-30"
+              aria-label="Página anterior"
+            >
+              <Icons.ChevronLeft size={14} />
+              Anterior
+            </button>
+            <span className="text-[10px] font-black uppercase tracking-widest text-tech-muted px-2">
+              Página <span className="text-tech-text">{productPage}</span>
+              {productTotal > 0 && (
+                <> / <span className="text-tech-text">{Math.max(1, Math.ceil(productTotal / 50))}</span></>
+              )}
+            </span>
+            <button
+              onClick={async () => {
+                const nextPage = productPage + 1;
+                setProductPage(nextPage);
+                const active = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
+                await fetchProductsList(productSearch, nextPage, false, false, active, productSort, productOrder);
+              }}
+              disabled={!hasMoreProducts || productsLoading}
+              className="bg-tech-card hover:bg-[#1a1b1e] border border-tech-border text-zinc-300 px-3 py-2 rounded-lg text-[10px] font-black uppercase italic tracking-wider transition-all flex items-center gap-1 disabled:opacity-30"
+              aria-label="Página siguiente"
+            >
+              Siguiente
+              <Icons.ChevronRight size={14} />
+            </button>
+          </div>
         </div>
           )}
         </>
