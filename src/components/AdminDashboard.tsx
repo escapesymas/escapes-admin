@@ -49,6 +49,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   // Products Search & Pagination
   const [productSearch, setProductSearch] = useState('');
   const [productPage, setProductPage] = useState(1);
+  const [productTotal, setProductTotal] = useState(0);
+  const [productSort, setProductSort] = useState('created_at');
+  const [productOrder, setProductOrder] = useState<'ASC' | 'DESC'>('DESC');
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
   const [productsLoading, setProductsLoading] = useState(false);
 
@@ -83,10 +86,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
   const authHeaders = () => ({ 'Authorization': `Bearer ${adminToken}` });
 
-  const fetchProductsList = async (searchVal = '', pageVal = 1, append = false, isSilent = false, filters: Record<string, string> = {}) => {
+  const fetchProductsList = async (
+    searchVal = '',
+    pageVal = 1,
+    append = false,
+    isSilent = false,
+    filters: Record<string, string> = {},
+    sortField = productSort,
+    sortDirection = productOrder,
+  ) => {
     if (!isSilent) setProductsLoading(true);
     try {
-      let url = `/api/admin?action=products-list&search=${encodeURIComponent(searchVal)}&page=${pageVal}&limit=50`;
+      let url = `/api/admin?action=products-list&search=${encodeURIComponent(searchVal)}&page=${pageVal}&limit=50&sort=${encodeURIComponent(sortField)}&order=${encodeURIComponent(sortDirection)}`;
       for (const [key, val] of Object.entries(filters)) {
         if (val !== '' && val !== undefined && val !== null) {
           url += `&${encodeURIComponent(key)}=${encodeURIComponent(val)}`;
@@ -102,6 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             : [];
         const total = data?.total ?? null;
         if (total !== null) {
+          setProductTotal(total);
           setHasMoreProducts(pageVal * 50 < total);
         } else {
           setHasMoreProducts(list.length >= 50);
@@ -474,8 +486,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             hasMoreProducts={hasMoreProducts}
             productSearch={productSearch}
             productPage={productPage}
+            productTotal={productTotal}
+            productSort={productSort}
+            productOrder={productOrder}
             setProductSearch={setProductSearch}
             setProductPage={setProductPage}
+            setProductSort={setProductSort}
+            setProductOrder={setProductOrder}
             setEditingProduct={setEditingProduct}
             setShowProductForm={setShowProductForm}
             fetchProductsList={fetchProductsList}
