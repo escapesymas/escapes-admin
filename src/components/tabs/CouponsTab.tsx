@@ -59,7 +59,7 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code || !value) return showToast('Faltan datos', 'error');
+    if (!code || (type !== 'free_shipping' && !value)) return showToast('Faltan datos', 'error');
 
     try {
       const valNum = type === 'fixed' ? Math.round(parseFloat(value) * 100) : parseFloat(value);
