@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Icons from 'lucide-react';
 import AccountingTab from './AccountingTab';
 import SyncTab from './tabs/SyncTab';
@@ -83,6 +83,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [showModalDeleteConfirm, setShowModalDeleteConfirm] = useState(false);
   const showToast = useToast().showToast;
 
+  const productsFetchControllerRef = useRef<AbortController | null>(null);
+
   const adminWpId = session?.user_id || session?.user?.id || session?.user?.publicMetadata?.wp_id || session?.wp_id || '';
   const adminEmail = session?.user_email || session?.user?.emailAddresses?.[0]?.emailAddress || '';
   const adminToken = session?.token || session?.jwt || '';
@@ -98,6 +100,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
     sortField = productSort,
     sortDirection = productOrder,
   ) => {
+    if (productsFetchControllerRef.current) {
+      productsFetchControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    productsFetchControllerRef.current = controller;
+
     if (!isSilent) setProductsLoading(true);
     try {
       let url = `/api/admin?action=products-list&search=${encodeURIComponent(searchVal)}&page=${pageVal}&limit=50&sort=${encodeURIComponent(sortField)}&order=${encodeURIComponent(sortDirection)}`;
@@ -106,7 +114,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           url += `&${encodeURIComponent(key)}=${encodeURIComponent(val)}`;
         }
       }
-      const res = await fetch(url, { headers: authHeaders() });
+      const res = await fetch(url, { headers: authHeaders(), signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data)
@@ -127,10 +135,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           setProducts(list);
         }
       }
-    } catch (e) {
-      console.error('[FETCH PRODUCTS ERROR]:', e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('[FETCH PRODUCTS ERROR]:', e);
+      }
     } finally {
-      if (!isSilent) setProductsLoading(false);
+      if (!isSilent && productsFetchControllerRef.current === controller) {
+        setProductsLoading(false);
+      }
     }
   };
 

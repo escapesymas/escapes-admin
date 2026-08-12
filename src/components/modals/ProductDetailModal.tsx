@@ -85,9 +85,10 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 const MiniBarChart: React.FC<{ data: Array<{ date: string; units: number; revenue_cents: number }> }> = ({ data }) => {
+  if (!data || data.length === 0) return null;
   const max = Math.max(1, ...data.map(d => d.revenue_cents));
   const totalW = 100; // viewBox width %
-  const barW = totalW / data.length;
+  const barW = data.length > 0 ? totalW / data.length : 0;
   return (
     <svg viewBox={`0 0 ${totalW} 30`} preserveAspectRatio="none" className="w-full h-24">
       {data.map((d, i) => {
@@ -99,7 +100,7 @@ const MiniBarChart: React.FC<{ data: Array<{ date: string; units: number; revenu
             key={d.date}
             x={x + barW * 0.15}
             y={y}
-            width={barW * 0.7}
+            width={Math.max(0.1, barW * 0.7)}
             height={Math.max(0.5, h)}
             rx={0.4}
             fill="#facc15"
@@ -352,7 +353,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-tech-border px-6 sticky top-[73px] bg-tech-card z-[5]">
+            <div className="flex border-b border-tech-border px-3 md:px-6 sticky top-0 bg-tech-card z-10 overflow-x-auto custom-scrollbar">
               {(['sales', 'details', 'compatibility'] as const).map(t => {
                 const labels: Record<typeof t, string> = {
                   sales: 'Ventas',
@@ -364,7 +365,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className={`flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                    className={`flex items-center gap-2 px-3 md:px-4 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all shrink-0 ${
                       tab === t ? 'border-tech-yellow text-tech-text' : 'border-transparent text-tech-muted hover:text-tech-text'
                     }`}
                   >
@@ -375,7 +376,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
               })}
             </div>
 
-            <div className="p-6">
+            <div className="p-3 md:p-6">
               {tab === 'sales' && stats && (
                 <div className="space-y-6">
                   {/* Stat cards */}
