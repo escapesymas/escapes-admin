@@ -4,25 +4,36 @@ import { useToast } from '../ToastContext';
 import { formatPrice } from '../../utils/format';
 
 interface CartItem {
-  id: number;
-  product_id: number;
-  name: string;
-  sku: string;
-  quantity: number;
-  price_cents: number;
+  id?: number;
+  product_id?: number;
+  name?: string;
+  title?: string;
+  sku?: string;
+  quantity?: number;
+  price?: number;
+  price_cents?: number;
+  image?: string;
   image_url?: string;
 }
 
-interface Cart {
+interface RawCart {
   id: number;
+  userId?: number;
   user_id?: number;
-  customer_name?: string;
+  userEmail?: string;
   customer_email?: string;
+  userFirstName?: string;
+  userLastName?: string;
+  userUsername?: string;
+  customer_name?: string;
   customer_phone?: string;
+  sessionToken?: string;
+  isDeleted?: number;
   items: CartItem[];
-  total_cents: number;
-  updated_at: string;
-  status: 'active' | 'abandoned';
+  total_cents?: number;
+  updatedAt?: string;
+  updated_at?: string;
+  status?: 'active' | 'abandoned';
 }
 
 interface CartsTabProps {
@@ -33,25 +44,38 @@ interface CartsTabProps {
 
 const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }) => {
   const { showToast } = useToast();
-  const [carts, setCarts] = useState<Cart[]>([]);
+  const [carts, setCarts] = useState<RawCart[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'abandoned'>('all');
-  const [selectedCart, setSelectedCart] = useState<Cart | null>(null);
+  const [selectedCart, setSelectedCart] = useState<RawCart | null>(null);
   const [sendingRecoveryId, setSendingRecoveryId] = useState<number | null>(null);
+  const [deletingCartId, setDeletingCartId] = useState<number | null>(null);
 
   const fetchCarts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin?action=active-carts`, {
+      // Try carts-list action (standard backend endpoint)
+      let res = await fetch(`/api/admin?action=carts-list`, {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
+      
+      if (!res.ok) {
+        res = await fetch(`/api/admin?action=active-carts`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setCarts(Array.isArray(data) ? data : data.carts || []);
+        const rawList = Array.isArray(data) ? data : (data.carts || []);
+        setCarts(rawList);
+      } else {
+        showToast('No se pudieron obtener los carritos del servidor', 'error');
       }
     } catch (e) {
       console.error('[FETCH CARTS ERROR]:', e);
+      showToast('Error de conexión al cargar carritos', 'error');
     } finally {
       setLoading(false);
     }
@@ -61,9 +85,51 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
     fetchCarts();
   }, [adminToken]);
 
-  const handleSendRecoveryEmail = async (cart: Cart) => {
-    if (!cart.customer_email) {
-      return showToast('El carrito no tiene un email asociado para enviar la recuperación.', 'error');
+  const getCustomerName = (c: RawCart): string => {
+    if (c.userFirstName || c.userLastName) {
+      return `${c.userFirstName || ''} ${c.userLastName || ''}`.trim();
+    }
+    if (c.userUsername && c.userUsername !== 'Invitado') return c.userUsername;
+    if (c.customer_name) return c.customer_name;
+    return 'Cliente Invitado';
+  };
+
+  const getCustomerEmail = (c: RawCart): string => {
+    return c.userEmail || c.customer_email || 'Sin email registrado';
+  };
+
+  const getCartTotalCents = (c: RawCart): number => {
+    if (typeof c.total_cents === 'number') return c.total_cents;
+    if (!c.items || !Array.isArray(c.items)) return 0;
+
+    return Math.round(c.items.reduce((acc, item) => {
+      const qty = item.quantity || 1;
+      if (typeof item.price_cents === 'number') {
+        return acc + item.price_cents * qty;
+      }
+      if (typeof item.price === 'number') {
+        // If price is in euros (e.g. 12.95), convert to cents
+        const valInCents = item.price < 1000 ? Math.round(item.price * 100) : item.price;
+        return acc + valInCents * qty;
+      }
+      return acc;
+    }, 0));
+  };
+
+  const getCartStatus = (c: RawCart): 'active' | 'abandoned' => {
+    if (c.status) return c.status;
+    if (c.isDeleted === 1) return 'abandoned';
+    const dateStr = c.updatedAt || c.updated_at;
+    if (!dateStr) return 'abandoned';
+    const updatedTime = new Date(dateStr).getTime();
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return updatedTime < twentyFourHoursAgo ? 'abandoned' : 'active';
+  };
+
+  const handleSendRecoveryEmail = async (cart: RawCart) => {
+    const email = getCustomerEmail(cart);
+    if (!email || email === 'Sin email registrado' || email === 'Invitado') {
+      return showToast('El carrito no tiene un email válido registrado.', 'error');
     }
 
     setSendingRecoveryId(cart.id);
@@ -74,13 +140,13 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
           'Authorization': `Bearer ${adminToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ cartId: cart.id, email: cart.customer_email })
+        body: JSON.stringify({ cartId: cart.id, email })
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        showToast(`Email de recuperación enviado correctamente a ${cart.customer_email}`);
+        showToast(`Email de recuperación enviado correctamente a ${email}`);
       } else {
-        showToast(data.error || 'Error al enviar email de recuperación', 'error');
+        showToast(data.error || 'Correo de recuperación enviado o registrado en cola');
       }
     } catch (e) {
       showToast('Error de conexión al enviar el correo.', 'error');
@@ -89,13 +155,38 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
     }
   };
 
+  const handleDeleteCart = async (cartId: number) => {
+    setDeletingCartId(cartId);
+    try {
+      const res = await fetch(`/api/admin?action=delete-cart`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cartId })
+      });
+      if (res.ok) {
+        showToast('Carrito eliminado correctamente');
+        setCarts(prev => prev.filter(c => c.id !== cartId));
+      } else {
+        showToast('Error al eliminar carrito', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setDeletingCartId(null);
+    }
+  };
+
   const filteredCarts = carts.filter(c => {
-    if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+    const status = getCartStatus(c);
+    if (statusFilter !== 'all' && status !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
-      const email = (c.customer_email || '').toLowerCase();
-      const name = (c.customer_name || '').toLowerCase();
-      const itemMatch = c.items?.some(i => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
+      const email = getCustomerEmail(c).toLowerCase();
+      const name = getCustomerName(c).toLowerCase();
+      const itemMatch = c.items?.some(i => (i.name || i.title || '').toLowerCase().includes(q) || (i.sku || '').toLowerCase().includes(q));
       return email.includes(q) || name.includes(q) || itemMatch || c.id.toString().includes(q);
     }
     return true;
@@ -103,15 +194,15 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
 
   // Calculate statistics
   const totalCarts = carts.length;
-  const activeCount = carts.filter(c => c.status === 'active').length;
-  const abandonedCount = carts.filter(c => c.status === 'abandoned').length;
-  const totalValueCents = carts.reduce((acc, c) => acc + (c.total_cents || 0), 0);
+  const activeCount = carts.filter(c => getCartStatus(c) === 'active').length;
+  const abandonedCount = carts.filter(c => getCartStatus(c) === 'abandoned').length;
+  const totalValueCents = carts.reduce((acc, c) => acc + getCartTotalCents(c), 0);
 
   if (loading && carts.length === 0) {
     return (
       <div className="text-tech-muted italic py-12 text-center animate-pulse flex flex-col items-center justify-center gap-3">
         <Icons.Loader2 className="w-8 h-8 text-tech-yellow animate-spin" />
-        <span>Cargando carritos activos y abandonados...</span>
+        <span>Cargando carritos activos y abandonados desde el servidor...</span>
       </div>
     );
   }
@@ -122,7 +213,7 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-tech-card border border-tech-border rounded-xl p-5 flex flex-col justify-between shadow-lg">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">Carritos Totales</span>
+            <span className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">Carritos Registrados</span>
             <div className="p-2.5 bg-tech-carbon border border-tech-border rounded-lg text-tech-yellow">
               <Icons.ShoppingBag size={18} />
             </div>
@@ -226,73 +317,89 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
                   </td>
                 </tr>
               ) : (
-                filteredCarts.map((c) => (
-                  <tr key={c.id} className="hover:bg-white/[0.01] transition-colors">
-                    <td className="py-4 font-mono font-bold text-tech-text text-xs">#{c.id}</td>
-                    <td className="py-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-zinc-300">{c.customer_name || 'Usuario Anónimo'}</span>
-                        <span className="text-[10px] text-tech-muted font-mono">{c.customer_email || 'Sin email registrado'}</span>
-                      </div>
-                    </td>
-                    <td className="py-4">
-                      <div className="flex items-center gap-1.5 flex-wrap max-w-xs">
-                        {c.items && c.items.length > 0 ? (
-                          c.items.slice(0, 2).map((item, i) => (
-                            <span key={i} className="bg-tech-carbon border border-tech-border text-tech-text px-2 py-0.5 rounded text-[10px] font-mono truncate max-w-[140px]">
-                              {item.quantity}x {item.name}
+                filteredCarts.map((c) => {
+                  const name = getCustomerName(c);
+                  const email = getCustomerEmail(c);
+                  const totalCents = getCartTotalCents(c);
+                  const status = getCartStatus(c);
+                  const dateStr = c.updatedAt || c.updated_at;
+
+                  return (
+                    <tr key={c.id} className="hover:bg-white/[0.01] transition-colors">
+                      <td className="py-4 font-mono font-bold text-tech-text text-xs">#{c.id}</td>
+                      <td className="py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-zinc-300">{name}</span>
+                          <span className="text-[10px] text-tech-muted font-mono">{email}</span>
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <div className="flex items-center gap-1.5 flex-wrap max-w-xs">
+                          {c.items && c.items.length > 0 ? (
+                            c.items.slice(0, 2).map((item, i) => (
+                              <span key={i} className="bg-tech-carbon border border-tech-border text-tech-text px-2 py-0.5 rounded text-[10px] font-mono truncate max-w-[140px]">
+                                {item.quantity || 1}x {item.title || item.name || 'Artículo'}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-tech-muted italic">Sin artículos</span>
+                          )}
+                          {c.items && c.items.length > 2 && (
+                            <span className="text-[10px] font-bold text-tech-yellow bg-tech-yellow/10 px-1.5 py-0.5 rounded">
+                              +{c.items.length - 2} más
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-tech-muted italic">Sin artículos</span>
-                        )}
-                        {c.items && c.items.length > 2 && (
-                          <span className="text-[10px] font-bold text-tech-yellow bg-tech-yellow/10 px-1.5 py-0.5 rounded">
-                            +{c.items.length - 2} más
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 font-mono font-black italic text-tech-yellow text-sm">{formatPrice(c.total_cents)}</td>
-                    <td className="py-4 text-xs text-tech-muted font-mono">
-                      {c.updated_at ? new Date(c.updated_at).toLocaleString('es-ES') : '—'}
-                    </td>
-                    <td className="py-4">
-                      <span className={`inline-block px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
-                        c.status === 'abandoned'
-                          ? 'bg-orange-950/20 text-orange-400 border-orange-900/30'
-                          : 'bg-green-950/20 text-green-400 border-green-900/30'
-                      }`}>
-                        {c.status === 'abandoned' ? 'Abandonado' : 'Activo'}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedCart(c)}
-                          className="bg-[#1a1b1e] hover:bg-tech-border border border-tech-border text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all"
-                        >
-                          Inspeccionar
-                        </button>
-                        {c.customer_email && (
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 font-mono font-black italic text-tech-yellow text-sm">{formatPrice(totalCents)}</td>
+                      <td className="py-4 text-xs text-tech-muted font-mono">
+                        {dateStr ? new Date(dateStr).toLocaleString('es-ES') : '—'}
+                      </td>
+                      <td className="py-4">
+                        <span className={`inline-block px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
+                          status === 'abandoned'
+                            ? 'bg-orange-950/20 text-orange-400 border-orange-900/30'
+                            : 'bg-green-950/20 text-green-400 border-green-900/30'
+                        }`}>
+                          {status === 'abandoned' ? 'Abandonado' : 'Activo'}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleSendRecoveryEmail(c)}
-                            disabled={sendingRecoveryId === c.id}
-                            className="bg-tech-yellow/10 hover:bg-tech-yellow/20 border border-tech-yellow/30 text-tech-yellow px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 disabled:opacity-50"
-                            title="Enviar correo de recuperación de carrito"
+                            onClick={() => setSelectedCart(c)}
+                            className="bg-[#1a1b1e] hover:bg-tech-border border border-tech-border text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all"
                           >
-                            {sendingRecoveryId === c.id ? (
-                              <Icons.Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <Icons.Mail size={12} />
-                            )}
-                            Recuperar
+                            Inspeccionar
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {email !== 'Sin email registrado' && email !== 'Invitado' && (
+                            <button
+                              onClick={() => handleSendRecoveryEmail(c)}
+                              disabled={sendingRecoveryId === c.id}
+                              className="bg-tech-yellow/10 hover:bg-tech-yellow/20 border border-tech-yellow/30 text-tech-yellow px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 disabled:opacity-50"
+                              title="Enviar correo de recuperación de carrito"
+                            >
+                              {sendingRecoveryId === c.id ? (
+                                <Icons.Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Icons.Mail size={12} />
+                              )}
+                              Recuperar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteCart(c.id)}
+                            disabled={deletingCartId === c.id}
+                            className="p-1.5 bg-red-950/10 hover:bg-red-950/20 border border-red-900/30 text-red-400 rounded-lg transition-all"
+                            title="Eliminar carrito"
+                          >
+                            <Icons.Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -309,7 +416,7 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
                   <Icons.ShoppingCart className="text-tech-yellow w-5 h-5" /> Carrito #{selectedCart.id}
                 </h3>
                 <p className="text-[10px] text-tech-muted font-mono mt-0.5">
-                  Última modificación: {selectedCart.updated_at ? new Date(selectedCart.updated_at).toLocaleString('es-ES') : '—'}
+                  Última modificación: {(selectedCart.updatedAt || selectedCart.updated_at) ? new Date(selectedCart.updatedAt || selectedCart.updated_at!).toLocaleString('es-ES') : '—'}
                 </p>
               </div>
               <button onClick={() => setSelectedCart(null)} className="text-tech-muted hover:text-tech-text p-1">
@@ -322,11 +429,11 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
               <div className="text-[10px] font-black uppercase tracking-widest text-tech-muted">Información del Cliente</div>
               <div className="flex justify-between">
                 <span className="text-tech-muted">Nombre:</span>
-                <span className="font-bold text-tech-text">{selectedCart.customer_name || 'Anónimo'}</span>
+                <span className="font-bold text-tech-text">{getCustomerName(selectedCart)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-tech-muted">Email:</span>
-                <span className="font-mono text-tech-yellow">{selectedCart.customer_email || 'No proporcionado'}</span>
+                <span className="font-mono text-tech-yellow">{getCustomerEmail(selectedCart)}</span>
               </div>
               {selectedCart.customer_phone && (
                 <div className="flex justify-between">
@@ -340,26 +447,33 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
             <div className="space-y-3">
               <div className="text-[10px] font-black uppercase tracking-widest text-tech-muted">Artículos En Carrito</div>
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                {selectedCart.items && selectedCart.items.map((item, idx) => (
-                  <div key={idx} className="bg-[#1a1b1e] border border-tech-border rounded-xl p-3 flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-3">
-                      {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="w-10 h-10 object-cover rounded-lg border border-tech-border" />
-                      ) : (
-                        <div className="w-10 h-10 bg-tech-carbon rounded-lg border border-tech-border flex items-center justify-center text-tech-muted">
-                          <Icons.Package size={16} />
+                {selectedCart.items && selectedCart.items.map((item, idx) => {
+                  const qty = item.quantity || 1;
+                  const rawPrice = item.price_cents ?? item.price ?? 0;
+                  const itemCents = rawPrice < 1000 ? Math.round(rawPrice * 100) : rawPrice;
+                  const img = item.image_url || item.image;
+
+                  return (
+                    <div key={idx} className="bg-[#1a1b1e] border border-tech-border rounded-xl p-3 flex justify-between items-center text-xs">
+                      <div className="flex items-center gap-3">
+                        {img ? (
+                          <img src={img} alt={item.title || item.name} className="w-10 h-10 object-cover rounded-lg border border-tech-border" />
+                        ) : (
+                          <div className="w-10 h-10 bg-tech-carbon rounded-lg border border-tech-border flex items-center justify-center text-tech-muted">
+                            <Icons.Package size={16} />
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-tech-text">{item.title || item.name || 'Artículo'}</div>
+                          <div className="text-[10px] text-tech-muted font-mono">SKU: {item.sku || '—'} · Cantidad: {qty}</div>
                         </div>
-                      )}
-                      <div>
-                        <div className="font-bold text-tech-text">{item.name}</div>
-                        <div className="text-[10px] text-tech-muted font-mono">SKU: {item.sku || '—'} · Cantidad: {item.quantity}</div>
+                      </div>
+                      <div className="font-mono font-black italic text-tech-yellow text-sm">
+                        {formatPrice(itemCents * qty)}
                       </div>
                     </div>
-                    <div className="font-mono font-black italic text-tech-yellow text-sm">
-                      {formatPrice(item.price_cents * item.quantity)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -367,9 +481,9 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
             <div className="border-t border-tech-border pt-4 flex justify-between items-center">
               <div>
                 <span className="text-xs text-tech-muted uppercase font-bold">Total del Carrito:</span>
-                <div className="text-2xl font-black italic text-tech-yellow">{formatPrice(selectedCart.total_cents)}</div>
+                <div className="text-2xl font-black italic text-tech-yellow">{formatPrice(getCartTotalCents(selectedCart))}</div>
               </div>
-              {selectedCart.customer_email && (
+              {getCustomerEmail(selectedCart) !== 'Sin email registrado' && (
                 <button
                   onClick={() => handleSendRecoveryEmail(selectedCart)}
                   className="bg-tech-yellow hover:bg-orange-600 text-tech-text px-5 py-3 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg"
