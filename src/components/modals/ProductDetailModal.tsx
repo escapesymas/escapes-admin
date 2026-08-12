@@ -189,13 +189,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
   const marginUnitPct = priceCents > 0 ? (marginUnitCents / priceCents) * 100 : 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
       <div
-        className="bg-tech-card border border-tech-border rounded-2xl w-full max-w-6xl my-8 shadow-2xl shadow-black/60"
+        className="bg-tech-card border border-tech-border rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/60 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-tech-border sticky top-0 bg-tech-card rounded-t-2xl z-10">
+        {/* Header — sticky inside the flex-column modal, not dependent on outer scroll */}
+        <div className="flex items-center justify-between p-5 border-b border-tech-border shrink-0 bg-tech-card rounded-t-2xl z-10">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-tech-yellow/10 border border-tech-yellow/30 flex items-center justify-center text-tech-yellow shrink-0">
               <Icons.Package size={20} />
@@ -235,19 +235,21 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
         )}
 
         {loading && (
-          <div className="p-12 flex flex-col items-center justify-center text-tech-muted">
-            <Icons.Loader2 size={32} className="animate-spin mb-3 text-tech-yellow" />
-            <span className="text-[10px] uppercase tracking-widest font-black">Cargando datos…</span>
+          <div className="flex-1 flex items-center justify-center text-tech-muted">
+            <div className="flex flex-col items-center">
+              <Icons.Loader2 size={32} className="animate-spin mb-3 text-tech-yellow" />
+              <span className="text-[10px] uppercase tracking-widest font-black">Cargando datos…</span>
+            </div>
           </div>
         )}
 
         {!loading && product && (
-          <div>
+          <div className="flex-1 overflow-y-auto">
             {/* Top section: large gallery left + product info right */}
-            <div className="grid grid-cols-[420px_1fr] gap-0 border-b border-tech-border">
+            <div className="grid grid-cols-1 md:grid-cols-[420px_1fr] gap-0 border-b border-tech-border">
 
               {/* Gallery — left panel, full height */}
-              <div className="flex flex-col gap-3 p-5 border-r border-tech-border bg-[#111112]">
+              <div className="flex flex-col gap-3 p-3 md:p-5 border-r-0 md:border-r border-tech-border bg-[#111112]">
                 {/* Main image */}
                 <div className="relative aspect-square bg-[#1a1b1e] border border-tech-border rounded-xl overflow-hidden flex items-center justify-center">
                   {currentImgSrc ? (
@@ -263,7 +265,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
                 </div>
                 {/* Thumbnails */}
                 {images.length > 1 && (
-                  <div className="grid grid-cols-6 gap-2">
+                  <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                     {images.map((img, i) => {
                       const src = (img as any).src || (img as any).url || '';
                       return (
@@ -287,7 +289,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
               </div>
 
               {/* Info — right panel */}
-              <div className="space-y-4 p-5 min-w-0">
+              <div className="space-y-4 p-3 md:p-5 min-w-0">
                 <div>
                   <h2 className="text-xl font-black italic text-tech-text uppercase tracking-tight leading-tight">{product.name}</h2>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-tech-muted">
