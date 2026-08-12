@@ -275,7 +275,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
             <div className="bg-[#1a1b1e] border border-tech-border rounded-xl p-4">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-tech-text uppercase">Variaciones</h4>
-                <button type="button" onClick={() => setVariations([...variations, { id: Date.now(), sku: '', price: '', stock_quantity: 0, stock_status: 'instock', attributes: [] }])} className="text-[10px] bg-zinc-800 text-white px-3 py-1.5 rounded-lg hover:bg-zinc-700">
+                <button type="button" onClick={() => setVariations([...variations, { id: Date.now() + Math.random(), sku: '', price: '', stock_quantity: 0, stock_status: 'instock', attributes: [] }])} className="text-[10px] bg-zinc-800 text-white px-3 py-1.5 rounded-lg hover:bg-zinc-700">
                   + Añadir Variación
                 </button>
               </div>

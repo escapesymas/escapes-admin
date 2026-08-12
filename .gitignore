@@ -2,3 +2,6 @@ dist/
 node_modules/
 pnpm-workspace.yaml
 .gstack/
+.env.local
+test-results/
+

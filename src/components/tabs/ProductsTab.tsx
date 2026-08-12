@@ -241,10 +241,14 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
       case 'category': {
         return <span className="text-[10px] text-[#cbd5e1]">{categoryMap[p.category_id!] || p.category_id || '-'}</span>;
       }
-      case 'category2':
-        return <span className="text-[10px] text-tech-muted">{p.category2 || '-'}</span>;
-      case 'category3':
-        return <span className="text-[10px] text-tech-muted">{p.category3 || '-'}</span>;
+      case 'category2': {
+        const cat2Id = p.category2_id ? Number(p.category2_id) : (p.category2 && !isNaN(Number(p.category2)) ? Number(p.category2) : null);
+        return <span className="text-[10px] text-tech-muted">{(cat2Id && categoryMap[cat2Id]) || p.category2 || '-'}</span>;
+      }
+      case 'category3': {
+        const cat3Id = p.category3_id ? Number(p.category3_id) : (p.category3 && !isNaN(Number(p.category3)) ? Number(p.category3) : null);
+        return <span className="text-[10px] text-tech-muted">{(cat3Id && categoryMap[cat3Id]) || p.category3 || '-'}</span>;
+      }
       case 'weight':
         return <span className="text-[10px] text-tech-muted">{p.weight_g ? `${(p.weight_g / 1000).toFixed(2)} kg` : '-'}</span>;
       case 'dimensions':
