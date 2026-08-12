@@ -21,6 +21,8 @@ interface ProductsTabProps {
   setProductOrder: (v: 'ASC' | 'DESC') => void;
   setEditingProduct: (p: Product | null) => void;
   setShowProductForm: (v: 'create' | 'edit' | null) => void;
+  setShowProductDetail: (v: boolean) => void;
+  setSelectedDetailProductId: (id: number | null) => void;
   fetchProductsList: (search: string, page: number, append: boolean, isSilent?: boolean, filters?: Record<string, string>, sort?: string, order?: 'ASC' | 'DESC') => Promise<void>;
   handleDeleteProduct: (id: number) => Promise<void>;
   userId: string;
@@ -72,6 +74,8 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   setProductOrder,
   setEditingProduct,
   setShowProductForm,
+  setShowProductDetail,
+  setSelectedDetailProductId,
   fetchProductsList,
   handleDeleteProduct,
   userId,
@@ -166,20 +170,30 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
     switch (key) {
       case 'image':
         return (
-          <div className="w-12 h-12 bg-[#1a1b1e] border border-tech-border rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+          <button
+            type="button"
+            onClick={() => { setSelectedDetailProductId(p.id); setShowProductDetail(true); }}
+            className="w-12 h-12 bg-[#1a1b1e] border border-tech-border rounded-lg overflow-hidden flex items-center justify-center shrink-0 hover:border-tech-yellow hover:ring-1 hover:ring-tech-yellow/30 transition-all"
+            title="Ver detalle del producto"
+          >
             {imageUrl ? (
               <img src={imageUrl} className="w-full h-full object-cover" alt={p.name} loading="lazy" decoding="async" />
             ) : (
               <Icons.Package className="w-5 h-5 text-zinc-700" />
             )}
-          </div>
+          </button>
         );
       case 'name':
         return (
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-tech-text">{p.name}</span>
+          <button
+            type="button"
+            onClick={() => { setSelectedDetailProductId(p.id); setShowProductDetail(true); }}
+            className="flex flex-col text-left hover:text-tech-yellow transition-colors group"
+            title="Ver detalle del producto"
+          >
+            <span className="text-xs font-bold text-tech-text group-hover:text-tech-yellow">{p.name}</span>
             <span className="text-[10px] text-tech-muted truncate max-w-[180px]">{p.description}</span>
-          </div>
+          </button>
         );
       case 'brand':
         return <span className="text-xs font-bold text-[#cbd5e1]">{p.brand || '-'}</span>;

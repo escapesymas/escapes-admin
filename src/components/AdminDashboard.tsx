@@ -13,6 +13,7 @@ import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
 import ProductFormModal from './modals/ProductFormModal';
+import ProductDetailModal from './modals/ProductDetailModal';
 import ConfirmModal from './modals/ConfirmModal';
 import ErrorBoundary from './ErrorBoundary';
 import { useToast } from './ToastContext';
@@ -59,6 +60,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showProductForm, setShowProductForm] = useState<'create' | 'edit' | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showProductDetail, setShowProductDetail] = useState(false);
+  const [selectedDetailProductId, setSelectedDetailProductId] = useState<number | null>(null);
   const [showOrderCreationModal, setShowOrderCreationModal] = useState(false);
 
   // Orders Search & Filtering
@@ -495,6 +498,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             setProductOrder={setProductOrder}
             setEditingProduct={setEditingProduct}
             setShowProductForm={setShowProductForm}
+            setShowProductDetail={setShowProductDetail}
+            setSelectedDetailProductId={setSelectedDetailProductId}
             fetchProductsList={fetchProductsList}
             handleDeleteProduct={handleDeleteProduct}
             userId={adminWpId || ''}
@@ -1160,6 +1165,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           product={editingProduct}
           onClose={() => setShowProductForm(null)}
           onSubmit={handleProductSubmit}
+        />
+      )}
+
+      {/* PRODUCT DETAIL MODAL */}
+      {showProductDetail && selectedDetailProductId && (
+        <ProductDetailModal
+          session={session}
+          productId={selectedDetailProductId}
+          onClose={() => { setShowProductDetail(false); setSelectedDetailProductId(null); }}
         />
       )}
 
