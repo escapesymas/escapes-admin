@@ -230,7 +230,7 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
             <tbody className="divide-y divide-zinc-900/50">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-tech-muted italic">
+                  <td colSpan={9} className="py-8 text-center text-tech-muted italic">
                     No se encontraron pedidos que coincidan con la búsqueda.
                   </td>
                 </tr>

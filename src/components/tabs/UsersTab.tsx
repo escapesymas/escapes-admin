@@ -14,6 +14,20 @@ interface UsersTabProps {
 const UsersTab: React.FC<UsersTabProps> = ({ users, adminWpId, adminEmail, adminToken, onUserSaved }) => {
   const { showToast } = useToast();
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+
+  const filteredUsers = users.filter(u => {
+    if (roleFilter !== 'all' && (u.role || 'customer') !== roleFilter) return false;
+    if (userSearch) {
+      const q = userSearch.toLowerCase();
+      const name = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q) || u.id.toString().includes(q);
+    }
+    return true;
+  });
 
   const handleSave = async () => {
     if (!editingUser) return;
@@ -47,6 +61,39 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, adminWpId, adminEmail, admin
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Search and Role Filter Bar */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:max-w-md">
+          <Icons.Search className="absolute left-4 top-3.5 w-4 h-4 text-tech-muted" />
+          <input
+            type="text"
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            placeholder="Buscar usuarios por nombre, email o ID..."
+            className="w-full bg-tech-card border border-tech-border rounded-xl pl-11 pr-4 py-3 text-xs text-tech-text placeholder-zinc-600 focus:outline-none focus:border-tech-yellow transition-all shadow-inner"
+          />
+        </div>
+        
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          {[
+            { id: 'all', label: 'Todos' },
+            { id: 'customer', label: 'Clientes' },
+            { id: 'admin', label: 'Admins' }
+          ].map(chip => (
+            <button
+              key={chip.id}
+              onClick={() => setRoleFilter(chip.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${
+                roleFilter === chip.id
+                  ? 'bg-tech-yellow/15 text-tech-yellow border-tech-yellow/30'
+                  : 'bg-tech-card text-tech-muted border-tech-border hover:text-zinc-300'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {editingUser && (
         <div className="bg-tech-card border border-tech-yellow/50 p-6 rounded-md">
           <h3 className="text-lg font-mono font-bold text-tech-yellow mb-4">Editar Usuario #{editingUser.id}</h3>
@@ -143,11 +190,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, adminWpId, adminEmail, admin
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900/50">
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-tech-muted italic">No hay usuarios registrados.</td>
+                  <td colSpan={7} className="py-8 text-center text-tech-muted italic">No hay usuarios registrados que coincidan con la búsqueda.</td>
                 </tr>
-              ) : users.map((u) => {
+              ) : filteredUsers.map((u) => {
                 let billing: UserBilling = { phone: '' };
                 try {
                   billing = typeof u.billing === 'string' ? JSON.parse(u.billing) : (u.billing || {});

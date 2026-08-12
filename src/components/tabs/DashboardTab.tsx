@@ -150,7 +150,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminWpId, adminEmai
                   <div className="w-full bg-tech-carbon h-1.5 rounded-sm overflow-hidden border border-tech-border/50">
                     <div 
                       className="bg-tech-yellow h-full transition-all duration-500" 
-                      style={{ width: stats.vps.disk.percent }}
+                      style={{ width: String(stats.vps.disk.percent).endsWith('%') ? stats.vps.disk.percent : `${stats.vps.disk.percent}%` }}
                     />
                   </div>
                 </div>
