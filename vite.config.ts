@@ -19,9 +19,14 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'https://api.escapesymas.com',
         changeOrigin: true,
-        secure: false,
+        secure: true,
+      },
+      '/uploads': {
+        target: 'https://api.escapesymas.com',
+        changeOrigin: true,
+        secure: true,
       }
     }
   },
