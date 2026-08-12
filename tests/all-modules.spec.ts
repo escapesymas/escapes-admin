@@ -107,6 +107,24 @@ test.describe('Navegación y Auditoría Integral de Módulos - Escapes Admin', (
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
       }
 
+      if (action === 'active-carts') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 501,
+              customer_name: 'Juan Pérez',
+              customer_email: 'juan@example.com',
+              total_cents: 85000,
+              updated_at: '2026-08-12T10:00:00Z',
+              status: 'abandoned',
+              items: [{ id: 1, product_id: 101, name: 'Escape Akrapovic', sku: 'AKRA-01', quantity: 1, price_cents: 85000 }]
+            }
+          ])
+        });
+      }
+
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
 
@@ -188,5 +206,12 @@ test.describe('Navegación y Auditoría Integral de Módulos - Escapes Admin', (
     await expect(page.locator('h1', { hasText: 'Contabilidad y Facturación' })).toBeVisible();
     await page.click('button:has-text("Facturas")');
     await page.click('button:has-text("Analíticas")');
+  });
+
+  test('10. Módulo Carritos: Inspección y Recuperación', async ({ page }) => {
+    await page.getByRole('button', { name: 'Carritos' }).click();
+    await expect(page.getByText('Carritos Totales')).toBeVisible();
+    await page.click('button:has-text("Inspeccionar")');
+    await expect(page.getByText('Información del Cliente')).toBeVisible();
   });
 });
