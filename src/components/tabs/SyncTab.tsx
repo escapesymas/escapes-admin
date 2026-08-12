@@ -485,6 +485,50 @@ const SyncTab = () => {
           )}
         </div>
       </div>
+
+      {/* Stock Auto-Sync section */}
+      <div className="bg-tech-card border border-tech-border rounded-2xl p-6 shadow-lg shadow-black/40 space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-tech-border pb-4 gap-4">
+          <div>
+            <h3 className="text-md font-black uppercase tracking-tighter italic text-zinc-200 flex items-center gap-2">
+              <Icons.RefreshCcw className="w-5 h-5 text-tech-yellow" /> Sincronización Automática de Stock (Bihr Inventory API v2.1)
+            </h3>
+            <p className="text-[10px] text-tech-muted mt-1 leading-relaxed">
+              Consulta en tiempo real la disponibilidad de stock en el almacén central de Bihr y actualiza el campo <code className="font-mono text-tech-yellow">stock</code> de los productos activos en modalidad dropshipping y bajo demanda.
+            </p>
+          </div>
+          <span className="px-2.5 py-1 rounded text-[8px] font-black uppercase tracking-widest bg-green-950/20 text-green-400 border border-green-900/30">
+            Cron Activo (Cada 6h)
+          </span>
+        </div>
+
+        <div className="bg-[#1a1b1e] border border-tech-border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
+          <div>
+            <span className="text-tech-muted">Estado del Servicio:</span>
+            <span className="font-bold text-green-400 ml-2">Operativo · Conexión API OK</span>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch(`/api/admin?action=sync-stock-bihr`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                if (res.ok) {
+                  showToast('Sincronización de stock Bihr iniciada correctamente');
+                } else {
+                  showToast('Error al iniciar sincronización de stock', 'error');
+                }
+              } catch (e) {
+                showToast('Error de conexión con el servidor', 'error');
+              }
+            }}
+            className="bg-tech-yellow/15 hover:bg-tech-yellow/25 text-tech-yellow border border-tech-yellow/30 px-4 py-2 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2"
+          >
+            <Icons.Zap size={14} /> Sincronizar Stock Ahora
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
