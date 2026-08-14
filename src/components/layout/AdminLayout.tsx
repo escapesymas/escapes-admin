@@ -10,6 +10,7 @@ interface AdminLayoutProps {
   onLogout: () => void;
   pendingOrdersCount: number;
   activeCartsCount: number;
+  pendingReviewsCount?: number;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -19,7 +20,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   session,
   onLogout,
   pendingOrdersCount,
-  activeCartsCount
+  activeCartsCount,
+  pendingReviewsCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -45,6 +47,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
     { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
     { id: 'products', label: 'Productos', icon: Icons.Package },
+    { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount },
     { id: 'users', label: 'Usuarios', icon: Icons.Users },
     { id: 'coupons', label: 'Cupones', icon: Icons.Ticket },
     { id: 'shipping', label: 'Envíos y Tarifas', icon: Icons.Truck },
