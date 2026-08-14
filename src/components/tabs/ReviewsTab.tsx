@@ -57,7 +57,7 @@ const ReviewsTab: React.FC<ReviewsTabProps> = ({ adminToken, onReviewsUpdated })
     } catch (err) {
       console.error('[FETCH REVIEWS ERROR]:', err);
       if (!isSilent) showToast('Error de conexión al cargar las reseñas', 'error');
-    } font-sans finally {
+    } finally {
       if (!isSilent) setLoading(false);
     }
   };
