@@ -184,10 +184,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
     fetchData();
 
     const interval = setInterval(() => {
+      if (document.hidden) return;
       if (!selectedOrder && !showProductForm && !editingProduct && !showModalDeleteConfirm) {
         fetchData(true);
       }
-    }, 15000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [adminWpId, adminEmail, selectedOrder, showProductForm, editingProduct, showModalDeleteConfirm]);

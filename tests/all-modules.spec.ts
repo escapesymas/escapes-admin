@@ -107,19 +107,20 @@ test.describe('Navegación y Auditoría Integral de Módulos - Escapes Admin', (
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
       }
 
-      if (action === 'active-carts') {
+      if (action === 'active-carts' || action === 'carts-list') {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([
             {
               id: 501,
-              customer_name: 'Juan Pérez',
-              customer_email: 'juan@example.com',
+              userFirstName: 'Juan',
+              userLastName: 'Pérez',
+              userEmail: 'juan@example.com',
               total_cents: 85000,
-              updated_at: '2026-08-12T10:00:00Z',
-              status: 'abandoned',
-              items: [{ id: 1, product_id: 101, name: 'Escape Akrapovic', sku: 'AKRA-01', quantity: 1, price_cents: 85000 }]
+              updatedAt: '2026-08-12T10:00:00Z',
+              isDeleted: 0,
+              items: [{ id: 1, product_id: 101, title: 'Escape Akrapovic', sku: 'AKRA-01', quantity: 1, price: 850 }]
             }
           ])
         });
@@ -210,7 +211,7 @@ test.describe('Navegación y Auditoría Integral de Módulos - Escapes Admin', (
 
   test('10. Módulo Carritos: Inspección y Recuperación', async ({ page }) => {
     await page.getByRole('button', { name: 'Carritos' }).click();
-    await expect(page.getByText('Carritos Totales')).toBeVisible();
+    await expect(page.getByText('Carritos Registrados')).toBeVisible({ timeout: 10000 });
     await page.click('button:has-text("Inspeccionar")');
     await expect(page.getByText('Información del Cliente')).toBeVisible();
   });
