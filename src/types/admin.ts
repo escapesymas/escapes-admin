@@ -221,3 +221,24 @@ export interface AdminSession {
     publicMetadata?: { wp_id?: string };
   };
 }
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Review {
+  id: number;
+  product_id: number;
+  product_name?: string;
+  product_sku?: string;
+  product_images?: any;
+  user_id?: number;
+  user_email?: string;
+  username?: string;
+  rating: number;
+  title?: string;
+  content?: string;
+  verified_purchase: boolean;
+  status: ReviewStatus;
+  created_at: string;
+  updated_at?: string;
+}
+

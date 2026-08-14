@@ -10,6 +10,7 @@ import CouponsTab from './tabs/CouponsTab';
 import SeoTab from './tabs/SeoTab';
 import MarginsTab from './tabs/MarginsTab';
 import CartsTab from './tabs/CartsTab';
+import ReviewsTab from './tabs/ReviewsTab';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
@@ -440,6 +441,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Consola de Sincronización (Bihr)'}
               {activeTab === 'margins' && 'Precios y Márgenes'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
+              {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
             </h1>
             <p className="text-tech-muted text-xs mt-1 font-medium">
               {activeTab === 'stats' && 'Vista general del rendimiento del e-commerce.'}
@@ -452,6 +454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
+              {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
             </p>
           </div>
           {activeTab === 'products' && (
@@ -566,6 +569,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'accounting' && (
           <AccountingTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} />
+        )}
+
+        {activeTab === 'reviews' && (
+          <ReviewsTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} onReviewsUpdated={() => fetchData(true)} />
         )}
         </ErrorBoundary>
       </div>
