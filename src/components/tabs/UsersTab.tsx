@@ -111,7 +111,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, adminToken, onUserSav
         showToast('Cliente actualizado con éxito', 'success');
         setIsEditing(false);
         onUserSaved();
-        // Actualizar datos locales del usuario seleccionado
         setSelectedUser({
           ...selectedUser,
           firstName: editForm.firstName,
@@ -133,6 +132,31 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, adminToken, onUserSav
       showToast('Error en la conexión con el servidor', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || user.email;
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente al cliente ${name} (#${user.id})?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin?action=delete-user`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Cliente eliminado correctamente', 'success');
+        setSelectedUser(null);
+        onUserSaved();
+      } else {
+        showToast(data.error || 'Error al eliminar el usuario', 'error');
+      }
+    } catch (err) {
+      showToast('Error de conexión al eliminar usuario', 'error');
     }
   };
 
@@ -183,7 +207,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, adminToken, onUserSav
           >
             <option value="id">Orden: Nº ID (Antigüedad)</option>
             <option value="name">Alfabético (Nombre)</option>
-            <option value="orders_desc">Más Compras realizadass</option>
+            <option value="orders_desc">Más Compras realizadas</option>
             <option value="orders_asc">Menos Compras realizadas</option>
             <option value="spent_desc">Mayor Gastado (€)</option>
             <option value="spent_asc">Menor Gastado (€)</option>
@@ -273,6 +297,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, adminToken, onUserSav
                           >
                             <Icons.Edit2 className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            onClick={() => handleDeleteUser(u)}
+                            className="p-1.5 text-red-400/70 hover:text-red-400 bg-red-950/20 hover:bg-red-900/30 rounded-lg border border-red-900/30 transition-colors"
+                            title="Eliminar Cliente"
+                          >
+                            <Icons.Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -328,6 +359,15 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, adminToken, onUserSav
                     Ver Dashboard
                   </button>
                 )}
+
+                <button
+                  onClick={() => handleDeleteUser(selectedUser)}
+                  className="p-2 text-red-400 hover:text-red-300 bg-red-950/30 border border-red-900/40 rounded-xl transition-all"
+                  title="Eliminar Cliente"
+                >
+                  <Icons.Trash2 className="w-5 h-5" />
+                </button>
+
                 <button
                   onClick={() => setSelectedUser(null)}
                   className="p-2 text-tech-muted hover:text-tech-text bg-[#1a1b1e] border border-tech-border rounded-xl"
