@@ -30,6 +30,279 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortField>('spent_desc');
 
+  // Estados selector de motos (Marcas -> Modelos -> Años) desde la BD
+  const [brands, setBrands] = useState<string[]>([]);
+  const [models, setModels] = useState<string[]>([]);
+  const [years, setYears] = useState<string[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [loadingYears, setLoadingYears] = useState(false);
+  const [showBikeForm, setShowBikeForm] = useState(false);
+  const [isAddingBike, setIsAddingBike] = useState(false);
+
+  // Estados gestión de direcciones múltiples del cliente
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [addressForm, setAddressForm] = useState({
+    alias: 'Principal',
+    type: 'envio' as 'envio' | 'fiscal',
+    address_1: '',
+    city: '',
+    postcode: '',
+    phone: '',
+    nif: ''
+  });
+  const [savingAddress, setSavingAddress] = useState(false);
+
+  const handleOpenNewAddressForm = () => {
+    setEditingAddressId(null);
+    setAddressForm({
+      alias: 'Nueva Dirección',
+      type: 'envio',
+      address_1: '',
+      city: '',
+      postcode: '',
+      phone: selectedUser?.phone || '',
+      nif: ''
+    });
+    setShowAddressForm(true);
+  };
+
+  const handleOpenEditAddressForm = (addr: any) => {
+    setEditingAddressId(addr.id);
+    setAddressForm({
+      alias: addr.alias || 'Dirección',
+      type: addr.type || 'envio',
+      address_1: addr.address_1 || '',
+      city: addr.city || '',
+      postcode: addr.postcode || '',
+      phone: addr.phone || '',
+      nif: addr.nif || ''
+    });
+    setShowAddressForm(true);
+  };
+
+  const handleAdminSaveAddress = async () => {
+    if (!selectedUser || !addressForm.address_1.trim() || !addressForm.city.trim() || !addressForm.postcode.trim()) {
+      showToast('Por favor, completa los campos obligatorios de la dirección', 'error');
+      return;
+    }
+    setSavingAddress(true);
+    try {
+      const parsedBilling = typeof selectedUser.billing === 'string'
+        ? (() => { try { return JSON.parse(selectedUser.billing); } catch { return {}; } })()
+        : (selectedUser.billing || {});
+
+      const currentAddresses: any[] = Array.isArray(parsedBilling.addresses) ? [...parsedBilling.addresses] : [];
+
+      const targetId = editingAddressId || `addr-${Date.now()}`;
+      const updatedAddrObj = {
+        id: targetId,
+        alias: addressForm.alias.trim() || 'Dirección',
+        type: addressForm.type,
+        address_1: addressForm.address_1.trim(),
+        city: addressForm.city.trim(),
+        postcode: addressForm.postcode.trim(),
+        phone: addressForm.phone.trim(),
+        nif: addressForm.type === 'fiscal' ? addressForm.nif.trim() : undefined
+      };
+
+      const existingIdx = currentAddresses.findIndex((a: any) => a.id === targetId);
+      if (existingIdx !== -1) {
+        currentAddresses[existingIdx] = updatedAddrObj;
+      } else {
+        currentAddresses.push(updatedAddrObj);
+      }
+
+      const newBilling = {
+        ...parsedBilling,
+        address_1: addressForm.address_1.trim(),
+        city: addressForm.city.trim(),
+        postcode: addressForm.postcode.trim(),
+        phone: addressForm.phone.trim(),
+        addresses: currentAddresses
+      };
+
+      const res = await fetch('/api/admin?action=save-user', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedUser.id,
+          firstName: selectedUser.firstName || '',
+          lastName: selectedUser.lastName || '',
+          username: selectedUser.username || '',
+          email: selectedUser.email || '',
+          role: selectedUser.role || 'customer',
+          phone: addressForm.phone.trim(),
+          address: addressForm.address_1.trim(),
+          city: addressForm.city.trim(),
+          postcode: addressForm.postcode.trim(),
+          billing: newBilling
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Dirección guardada con éxito', 'success');
+        setSelectedUser({
+          ...selectedUser,
+          billing: newBilling,
+          phone: addressForm.phone.trim(),
+          address: addressForm.address_1.trim(),
+          city: addressForm.city.trim(),
+          postcode: addressForm.postcode.trim()
+        });
+        setShowAddressForm(false);
+        setEditingAddressId(null);
+        onUserSaved();
+      } else {
+        showToast(data.error || `Error ${res.status}: no se pudo guardar la dirección`, 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Error de conexión', 'error');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const handleAdminDeleteAddress = async (addressId: string) => {
+    if (!selectedUser || !addressId) return;
+    try {
+      const parsedBilling = typeof selectedUser.billing === 'string'
+        ? (() => { try { return JSON.parse(selectedUser.billing); } catch { return {}; } })()
+        : (selectedUser.billing || {});
+
+      const currentAddresses: any[] = Array.isArray(parsedBilling.addresses) ? [...parsedBilling.addresses] : [];
+      const updatedAddresses = currentAddresses.filter((a: any) => a.id !== addressId);
+
+      const newBilling = {
+        ...parsedBilling,
+        addresses: updatedAddresses
+      };
+
+      const res = await fetch('/api/admin?action=save-user', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedUser.id,
+          firstName: selectedUser.firstName || '',
+          lastName: selectedUser.lastName || '',
+          username: selectedUser.username || '',
+          email: selectedUser.email || '',
+          role: selectedUser.role || 'customer',
+          billing: newBilling
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Dirección eliminada', 'success');
+        setSelectedUser({ ...selectedUser, billing: newBilling });
+        onUserSaved();
+      } else {
+        showToast(data.error || 'Error al eliminar dirección', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión', 'error');
+    }
+  };
+
+  // 1. Cargar Marcas al montar
+  React.useEffect(() => {
+    fetch('/api/vehicles?action=brands')
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setBrands(data); })
+      .catch(() => setBrands([]));
+  }, []);
+
+  // 2. Cargar Modelos al seleccionar Marca
+  React.useEffect(() => {
+    if (!selectedBrand) {
+      setModels([]);
+      return;
+    }
+    setLoadingModels(true);
+    fetch(`/api/vehicles?action=models&brand=${encodeURIComponent(selectedBrand)}`)
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setModels(data); })
+      .catch(() => setModels([]))
+      .finally(() => setLoadingModels(false));
+  }, [selectedBrand]);
+
+  // 3. Cargar Años al seleccionar Modelo
+  React.useEffect(() => {
+    if (!selectedBrand || !selectedModel) {
+      setYears([]);
+      return;
+    }
+    setLoadingYears(true);
+    fetch(`/api/vehicles?action=years&brand=${encodeURIComponent(selectedBrand)}&model=${encodeURIComponent(selectedModel)}`)
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setYears(data); })
+      .catch(() => setYears([]))
+      .finally(() => setLoadingYears(false));
+  }, [selectedBrand, selectedModel]);
+
+  const handleAddBike = async () => {
+    if (!selectedUser || !selectedBrand || !selectedModel || !selectedYear) return;
+    const bikeStr = `${selectedBrand} ${selectedModel} (${selectedYear})`;
+    setIsAddingBike(true);
+    try {
+      const res = await fetch('/api/admin?action=admin-add-garage-bike', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          bike: { brand: selectedBrand, model: selectedModel, year: selectedYear }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Moto añadida al garaje del cliente', 'success');
+        const updatedGarage = [bikeStr, ...(selectedUser.garage || [])];
+        setSelectedUser({ ...selectedUser, garage: updatedGarage });
+        setSelectedBrand('');
+        setSelectedModel('');
+        setSelectedYear('');
+        setShowBikeForm(false);
+        onUserSaved();
+      } else {
+        showToast(data.error || 'Error al añadir moto', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setIsAddingBike(false);
+    }
+  };
+
+  const handleRemoveBike = async (bikeLabel: string) => {
+    if (!selectedUser || !bikeLabel) return;
+    try {
+      const res = await fetch('/api/admin?action=admin-remove-garage-bike', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUser.id, bikeLabel })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Moto eliminada del garaje', 'success');
+        const updatedGarage = (selectedUser.garage || []).filter((item: any) => {
+          const label = typeof item === 'string'
+            ? item.trim()
+            : `${item.brand || ''} ${item.model || ''} ${item.year ? `(${item.year})` : ''}`.trim();
+          return label.toLowerCase() !== bikeLabel.toLowerCase();
+        });
+        setSelectedUser({ ...selectedUser, garage: updatedGarage });
+        onUserSaved();
+      } else {
+        showToast(data.error || 'Error al eliminar moto', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión', 'error');
+    }
+  };
+
   // Filtrado de usuarios
   let filtered = users.filter(u => {
     if (roleFilter !== 'all' && (u.role || 'customer') !== roleFilter) return false;
@@ -453,59 +726,62 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
             
             <div>
               {/* Controles superiores */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-tech-border pb-4 mb-6">
+              <div className="flex items-start justify-between gap-3 border-b border-tech-border pb-4 mb-6 relative">
                 
-                {/* Botones de acción */}
-                <div className="flex items-center gap-2">
-                  {!isEditing ? (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg"
-                    >
-                      <Icons.Edit2 className="w-4 h-4" /> Editar Datos
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition-all"
-                    >
-                      Descartar Edición
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => handleDeleteUser(selectedUser)}
-                    className="p-2 text-red-400 hover:text-red-300 bg-red-950/30 border border-red-900/40 rounded-xl transition-all"
-                    title="Eliminar Contacto"
-                  >
-                    <Icons.Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Etapas de fidelización */}
-                <div className="flex items-center gap-1.5 bg-[#1a1b1e] border border-tech-border rounded-xl p-1 text-[11px] font-black uppercase tracking-wider">
-                  {['Prospecto', 'Primera Compra', 'Recurrente', 'VIP / Oro'].map((stg) => {
-                    const currentStg = getCustomerStage(selectedUser).label;
-                    const isActive = currentStg.includes(stg);
-                    return (
-                      <span
-                        key={stg}
-                        className={`px-3 py-1 rounded-lg transition-all ${
-                          isActive
-                            ? 'bg-tech-yellow text-tech-carbon shadow-md font-bold'
-                            : 'text-tech-muted'
-                        }`}
+                {/* Botones de acción e insignias */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pr-10">
+                  <div className="flex items-center gap-2">
+                    {!isEditing ? (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg"
                       >
-                        {stg}
-                      </span>
-                    );
-                  })}
+                        <Icons.Edit2 className="w-4 h-4" /> Editar Datos
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setIsEditing(false)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition-all"
+                      >
+                        Descartar Edición
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDeleteUser(selectedUser)}
+                      className="p-2 text-red-400 hover:text-red-300 bg-red-950/30 border border-red-900/40 rounded-xl transition-all"
+                      title="Eliminar Contacto"
+                    >
+                      <Icons.Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Etapas de fidelización */}
+                  <div className="flex items-center gap-1 bg-[#1a1b1e] border border-tech-border rounded-xl p-1 text-[10px] font-black uppercase tracking-wider overflow-x-auto max-w-full">
+                    {['Prospecto', 'Primera Compra', 'Recurrente', 'VIP / Oro'].map((stg) => {
+                      const currentStg = getCustomerStage(selectedUser).label;
+                      const isActive = currentStg.includes(stg);
+                      return (
+                        <span
+                          key={stg}
+                          className={`px-2.5 py-1 rounded-lg shrink-0 transition-all ${
+                            isActive
+                              ? 'bg-tech-yellow text-tech-carbon shadow-md font-bold'
+                              : 'text-tech-muted'
+                          }`}
+                        >
+                          {stg}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Botón cerrar */}
+                {/* Botón cerrar X siempre arriba a la derecha */}
                 <button
                   onClick={() => setSelectedUser(null)}
-                  className="p-2 text-tech-muted hover:text-tech-text bg-[#1a1b1e] border border-tech-border rounded-xl"
+                  className="p-2 text-tech-muted hover:text-tech-text bg-[#1a1b1e] hover:bg-tech-border border border-tech-border rounded-xl absolute right-0 top-0 transition-all shrink-0"
+                  title="Cerrar Ficha"
                 >
                   <Icons.X className="w-5 h-5" />
                 </button>
@@ -634,18 +910,232 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                     </div>
                   )}
 
-                  {/* Tab 2: Dirección & Envíos */}
+                  {/* Tab 2: Dirección & Envíos (LIBRETA DE DIRECCIONES MÚLTIPLES CON FORMULARIO DESPLEGABLE) */}
                   {activeTab === 'address' && (
-                    <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 space-y-3 text-xs">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow block border-b border-tech-border pb-2">
-                        Dirección Principal de Facturación y Entrega
-                      </span>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <p><strong className="text-tech-muted">Calle / Dirección:</strong> {editForm.address || '-'}</p>
-                        <p><strong className="text-tech-muted">Ciudad:</strong> {editForm.city || '-'}</p>
-                        <p><strong className="text-tech-muted">Código Postal:</strong> <span className="font-mono text-tech-text">{editForm.postcode || '-'}</span></p>
-                        <p><strong className="text-tech-muted">País:</strong> España</p>
+                    <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 space-y-4 text-xs">
+                      {/* Cabecera del Tab con Botón + Añadir Dirección */}
+                      <div className="flex items-center justify-between border-b border-tech-border pb-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow flex items-center gap-2">
+                          <Icons.MapPin className="w-4 h-4" /> Libreta de Direcciones del Cliente
+                        </span>
+
+                        <button
+                          onClick={() => {
+                            if (showAddressForm) {
+                              setShowAddressForm(false);
+                              setEditingAddressId(null);
+                            } else {
+                              handleOpenNewAddressForm();
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-lg font-black uppercase text-[10px] tracking-wider transition-all flex items-center gap-1 shadow"
+                        >
+                          {showAddressForm ? (
+                            <>
+                              <Icons.X className="w-3.5 h-3.5" /> Ocultar Formulario
+                            </>
+                          ) : (
+                            <>
+                              <Icons.Plus className="w-3.5 h-3.5" /> Añadir Dirección
+                            </>
+                          )}
+                        </button>
                       </div>
+
+                      {/* Formulario colapsable (Añadir o Editar) */}
+                      {showAddressForm && (
+                        <div className="bg-tech-card p-4 rounded-xl border border-tech-border space-y-3 animate-fade-in">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-tech-yellow block border-b border-tech-border pb-2">
+                            {editingAddressId ? 'Editar Dirección' : 'Añadir Nueva Dirección'}
+                          </span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Nombre / Alias (ej: Casa, Taller)</label>
+                              <input
+                                type="text"
+                                value={addressForm.alias}
+                                onChange={(e) => setAddressForm({ ...addressForm, alias: e.target.value })}
+                                placeholder="Ej: Dirección Principal"
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Tipo de Dirección</label>
+                              <select
+                                value={addressForm.type}
+                                onChange={(e) => setAddressForm({ ...addressForm, type: e.target.value as 'envio' | 'fiscal' })}
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none text-xs font-semibold"
+                              >
+                                <option value="envio">Envío de Pedidos</option>
+                                <option value="fiscal">Facturación / Fiscal</option>
+                              </select>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Dirección / Calle y Número *</label>
+                              <input
+                                type="text"
+                                value={addressForm.address_1}
+                                onChange={(e) => setAddressForm({ ...addressForm, address_1: e.target.value })}
+                                placeholder="Ej: Calle Gran Vía 12, 3ºA"
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Ciudad *</label>
+                              <input
+                                type="text"
+                                value={addressForm.city}
+                                onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
+                                placeholder="Ej: Madrid"
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Código Postal *</label>
+                              <input
+                                type="text"
+                                value={addressForm.postcode}
+                                onChange={(e) => setAddressForm({ ...addressForm, postcode: e.target.value })}
+                                placeholder="Ej: 28001"
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none font-mono text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">Teléfono de Contacto</label>
+                              <input
+                                type="text"
+                                value={addressForm.phone}
+                                onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
+                                placeholder="Ej: 600112233"
+                                className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none font-mono text-xs"
+                              />
+                            </div>
+
+                            {addressForm.type === 'fiscal' && (
+                              <div>
+                                <label className="block text-tech-muted font-bold mb-1 uppercase text-[9px] tracking-wider">NIF / CIF / DNI (Para factura)</label>
+                                <input
+                                  type="text"
+                                  value={addressForm.nif}
+                                  onChange={(e) => setAddressForm({ ...addressForm, nif: e.target.value })}
+                                  placeholder="Ej: 12345678Z"
+                                  className="w-full bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-tech-text focus:border-tech-yellow outline-none font-mono text-xs"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-2">
+                            <button
+                              onClick={() => {
+                                setShowAddressForm(false);
+                                setEditingAddressId(null);
+                              }}
+                              className="px-4 py-2 bg-[#1a1b1e] border border-tech-border text-tech-muted hover:text-tech-text rounded-lg text-[10px] font-bold uppercase transition-all"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={handleAdminSaveAddress}
+                              disabled={savingAddress}
+                              className="px-4 py-2 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 disabled:opacity-50 font-black uppercase text-[10px] tracking-wider rounded-lg shadow transition-all flex items-center gap-1"
+                            >
+                              <Icons.Save className="w-3.5 h-3.5" />
+                              {savingAddress ? 'Guardando...' : 'Guardar Dirección'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lista de direcciones guardadas */}
+                      {(() => {
+                        const parsedBilling = typeof selectedUser.billing === 'string'
+                          ? (() => { try { return JSON.parse(selectedUser.billing); } catch { return {}; } })()
+                          : (selectedUser.billing || {});
+
+                        let addressList: any[] = Array.isArray(parsedBilling.addresses) ? parsedBilling.addresses : [];
+
+                        // Si no hay array de direcciones pero hay address_1 legacy, incluirla como principal
+                        if (addressList.length === 0 && (parsedBilling.address_1 || selectedUser.address)) {
+                          addressList = [{
+                            id: 'legacy-primary',
+                            alias: 'Dirección Principal',
+                            type: 'envio',
+                            address_1: parsedBilling.address_1 || selectedUser.address || '',
+                            city: parsedBilling.city || selectedUser.city || '',
+                            postcode: parsedBilling.postcode || selectedUser.postcode || '',
+                            phone: parsedBilling.phone || selectedUser.phone || ''
+                          }];
+                        }
+
+                        return addressList.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {addressList.map((addr: any, index: number) => (
+                              <div
+                                key={addr.id || index}
+                                className="bg-tech-card border border-tech-border p-4 rounded-xl space-y-2 relative flex flex-col justify-between hover:border-tech-yellow/40 transition-all"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-tech-text uppercase text-xs flex items-center gap-1.5">
+                                      <Icons.MapPin className="w-3.5 h-3.5 text-tech-yellow" />
+                                      {addr.alias || `Dirección #${index + 1}`}
+                                    </span>
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                      addr.type === 'fiscal'
+                                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    }`}>
+                                      {addr.type === 'fiscal' ? 'Fiscal' : 'Envío'}
+                                    </span>
+                                  </div>
+
+                                  <p className="text-tech-text font-medium text-xs pt-1">{addr.address_1 || '-'}</p>
+                                  <p className="text-tech-muted text-[11px] font-mono">
+                                    {addr.postcode || ''} {addr.city || ''}
+                                  </p>
+                                  {addr.phone && (
+                                    <p className="text-tech-muted text-[11px] font-mono">
+                                      📞 {addr.phone}
+                                    </p>
+                                  )}
+                                  {addr.nif && (
+                                    <p className="text-tech-muted text-[11px] font-mono">
+                                      🪪 NIF: {addr.nif}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="flex justify-end gap-2 border-t border-tech-border/60 pt-3.5 mt-2">
+                                  <button
+                                    onClick={() => handleOpenEditAddressForm(addr)}
+                                    className="px-2.5 py-1.5 bg-[#1a1b1e] hover:bg-tech-border text-tech-text border border-tech-border rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
+                                  >
+                                    <Icons.Edit2 className="w-3 h-3" /> Editar
+                                  </button>
+                                  <button
+                                    onClick={() => handleAdminDeleteAddress(addr.id)}
+                                    className="p-1.5 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 rounded-lg transition-all"
+                                    title="Eliminar dirección"
+                                  >
+                                    <Icons.Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center text-tech-muted italic">
+                            El cliente aún no ha guardado ninguna dirección de envío o facturación.
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -715,23 +1205,139 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                     </div>
                   )}
 
-                  {/* Tab 4: Garaje de Motos */}
+                  {/* Tab 4: Garaje de Motos (CON AÑADIR / ELIMINAR DIRECTO) */}
                   {activeTab === 'garage' && (
-                    <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 text-xs space-y-3">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow block border-b border-tech-border pb-2 flex items-center gap-2">
-                        <Icons.Bike className="w-4 h-4" /> Motos Guardadas en el Garaje del Cliente
-                      </span>
-                      {selectedUser.garage && Array.isArray(selectedUser.garage) && selectedUser.garage.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {selectedUser.garage.map((m: any, idx: number) => (
-                            <span key={idx} className="bg-tech-card border border-tech-border px-3 py-1.5 rounded-lg font-mono text-tech-text text-xs">
-                              🏍️ {typeof m === 'string' ? m : `${m.brand || ''} ${m.model || ''} (${m.year || ''})`}
-                            </span>
-                          ))}
+                    <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 text-xs space-y-4">
+                      {/* Botón superior para desplegar el selector de moto */}
+                      <div className="flex items-center justify-between border-b border-tech-border pb-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow flex items-center gap-2">
+                          <Icons.Bike className="w-4 h-4" /> Motos Guardadas en el Garaje del Cliente
+                        </span>
+
+                        <button
+                          onClick={() => setShowBikeForm(!showBikeForm)}
+                          className="px-3 py-1.5 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-lg font-black uppercase text-[10px] tracking-wider transition-all flex items-center gap-1 shadow"
+                        >
+                          {showBikeForm ? (
+                            <>
+                              <Icons.X className="w-3.5 h-3.5" /> Ocultar Formulario
+                            </>
+                          ) : (
+                            <>
+                              <Icons.Plus className="w-3.5 h-3.5" /> Añadir Moto
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Desplegable para seleccionar moto desde la BD */}
+                      {showBikeForm && (
+                        <div className="bg-tech-card p-4 rounded-xl border border-tech-border space-y-3 animate-fade-in">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-tech-muted block">
+                            Seleccionar vehículo del catálogo de la tienda
+                          </span>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {/* 1. Selección de Marca */}
+                            <select
+                              value={selectedBrand}
+                              onChange={(e) => {
+                                setSelectedBrand(e.target.value);
+                                setSelectedModel('');
+                                setSelectedYear('');
+                              }}
+                              className="bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-xs text-tech-text focus:border-tech-yellow outline-none font-medium"
+                            >
+                              <option value="">-- Marca --</option>
+                              {brands.map(b => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+
+                            {/* 2. Selección de Modelo */}
+                            <select
+                              value={selectedModel}
+                              onChange={(e) => {
+                                setSelectedModel(e.target.value);
+                                setSelectedYear('');
+                              }}
+                              disabled={!selectedBrand || loadingModels}
+                              className="bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-xs text-tech-text focus:border-tech-yellow outline-none font-medium disabled:opacity-50"
+                            >
+                              <option value="">{loadingModels ? 'Cargando...' : '-- Modelo --'}</option>
+                              {models.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+
+                            {/* 3. Selección de Año */}
+                            <select
+                              value={selectedYear}
+                              onChange={(e) => setSelectedYear(e.target.value)}
+                              disabled={!selectedModel || loadingYears}
+                              className="bg-[#1a1b1e] border border-tech-border rounded-lg px-3 py-2 text-xs text-tech-text focus:border-tech-yellow outline-none font-medium disabled:opacity-50"
+                            >
+                              <option value="">{loadingYears ? 'Cargando...' : '-- Año --'}</option>
+                              {years.map(y => (
+                                <option key={y} value={y}>{y}</option>
+                              ))}
+                              {years.length > 0 && <option value="Todos">Todos los años</option>}
+                            </select>
+                          </div>
+
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={handleAddBike}
+                              disabled={isAddingBike || !selectedBrand || !selectedModel || !selectedYear}
+                              className="px-4 py-2 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 disabled:opacity-40 font-black uppercase text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shrink-0 shadow"
+                            >
+                              <Icons.Plus className="w-3.5 h-3.5" />
+                              {isAddingBike ? 'Guardando...' : 'Confirmar y Guardar Moto'}
+                            </button>
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-tech-muted italic">El cliente aún no ha registrado ninguna moto en su garaje virtual.</p>
                       )}
+
+                      {/* Lista de motos */}
+                      {(() => {
+                        const rawGarage = selectedUser.garage && Array.isArray(selectedUser.garage) ? selectedUser.garage : [];
+                        const seen = new Set<string>();
+                        const uniqueGarage: any[] = [];
+
+                        for (const item of rawGarage) {
+                          const label = typeof item === 'string'
+                            ? item.trim()
+                            : `${item.brand || ''} ${item.model || ''} ${item.year ? `(${item.year})` : ''}`.trim();
+                          const key = label.toLowerCase();
+                          if (key && !seen.has(key)) {
+                            seen.add(key);
+                            uniqueGarage.push({ original: item, label });
+                          }
+                        }
+
+                        return uniqueGarage.length > 0 ? (
+                          <div className="flex flex-col gap-2">
+                            {uniqueGarage.map((m, idx) => (
+                              <div key={idx} className="bg-tech-card border border-tech-border px-3.5 py-2.5 rounded-xl font-mono text-tech-text text-xs flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-base">🏍️</span>
+                                  <span className="font-bold truncate">{m.label}</span>
+                                </div>
+
+                                <button
+                                  onClick={() => handleRemoveBike(m.label)}
+                                  className="p-1.5 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 rounded-lg transition-all"
+                                  title="Eliminar esta moto del garaje del cliente"
+                                >
+                                  <Icons.Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-tech-muted italic">El cliente aún no ha registrado ninguna moto en su garaje virtual.</p>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
