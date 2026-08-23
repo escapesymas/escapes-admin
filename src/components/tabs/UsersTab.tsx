@@ -583,7 +583,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
               {/* SISTEMA DE PESTAÑAS */}
               {!isEditing ? (
                 <div>
-                  <div className="flex border-b border-tech-border gap-6 mb-6">
+                  <div className="flex border-b border-tech-border gap-3 sm:gap-6 mb-6 overflow-x-auto no-scrollbar pb-1">
                     {[
                       { id: 'info', label: 'Información General', icon: Icons.User },
                       { id: 'address', label: 'Dirección & Envíos', icon: Icons.MapPin },
@@ -595,7 +595,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                         <button
                           key={tb.id}
                           onClick={() => setActiveTab(tb.id as any)}
-                          className={`flex items-center gap-2 pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
+                          className={`flex items-center gap-2 pb-3 text-xs font-black uppercase tracking-wider border-b-2 shrink-0 transition-all ${
                             activeTab === tb.id
                               ? 'border-tech-yellow text-tech-yellow'
                               : 'border-transparent text-tech-muted hover:text-tech-text'
