@@ -90,7 +90,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     <div className="min-h-screen bg-tech-carbon text-tech-text flex flex-col md:flex-row font-sans relative">
       {/* Mobile Header Bar */}
       {isMobile && (
-        <header className="flex md:hidden bg-tech-card border-b border-tech-border p-4 justify-between items-center sticky top-0 z-40">
+        <header className="flex md:hidden bg-tech-card border-b border-tech-border px-4 pb-3.5 pt-[max(1rem,env(safe-area-inset-top))] justify-between items-center sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-tech-yellow rounded-sm flex items-center justify-center text-tech-carbon">
               <Icons.Shield size={16} />
@@ -130,7 +130,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {/* Mobile Sidebar Navigation Drawer */}
       {isMobile && isMobileMenuOpen && (
         <aside className="fixed left-0 top-0 bottom-0 w-64 bg-tech-card border-r border-tech-border z-50 flex flex-col h-full md:hidden shadow-2xl">
-          <div className="p-6 border-b border-tech-border flex items-center justify-between">
+          <div className="px-6 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] border-b border-tech-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-tech-yellow rounded-md flex items-center justify-center text-tech-carbon shadow-lg shadow-yellow-500/20">
                 <Icons.Shield className="w-5 h-5" />
