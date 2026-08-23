@@ -534,10 +534,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         {activeTab === 'users' && (
           <UsersTab
             users={users}
+            orders={orders}
             adminWpId={adminWpId}
             adminEmail={adminEmail}
             adminToken={adminToken}
             onUserSaved={() => fetchData(true)}
+            onSelectOrder={(order) => setSelectedOrder(order)}
           />
         )}
 
