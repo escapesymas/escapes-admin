@@ -32,7 +32,17 @@ export const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
   const checkSubscription = async () => {
     try {
       setLoading(true);
-      const sub = await getCurrentSubscription();
+      if (!supported) {
+        setLoading(false);
+        return;
+      }
+      // Registrar primero el SW si no lo estaba para evitar bloqueo en navigator.serviceWorker.ready
+      await registerServiceWorker().catch(() => {});
+      
+      const subPromise = getCurrentSubscription();
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+      const sub = await Promise.race([subPromise, timeoutPromise]);
+      
       setIsSubscribed(!!sub);
     } catch (e) {
       console.error('Error al comprobar suscripción push:', e);
