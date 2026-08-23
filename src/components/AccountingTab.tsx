@@ -132,7 +132,10 @@ export default function AccountingTab({ adminWpId, adminEmail, adminToken }: { a
   const [csvExporting, setCsvExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const BASE = `/api/admin`;
+  // Audit 2026-08-15, finding #X: previous BASE was `/api/admin` and the call
+// sites appended `&action=…`, producing `/api/admin&action=…` (broken — no
+// `?`). Use a `?action=…` BASE so the URL is well-formed.
+const BASE = `/api/admin`;
   const authHeaders = { 'Authorization': `Bearer ${adminToken}` };
 
   const loadAnalytics = useCallback(async () => {
@@ -140,8 +143,8 @@ export default function AccountingTab({ adminWpId, adminEmail, adminToken }: { a
     setError(null);
     try {
       const [analyticsRes, invRes] = await Promise.all([
-        fetch(`${BASE}&action=financial-analytics&period=${period}`, { headers: authHeaders }),
-        fetch(`${BASE}&action=invoices-list`, { headers: authHeaders }),
+        fetch(`${BASE}?action=financial-analytics&period=${period}`, { headers: authHeaders }),
+        fetch(`${BASE}?action=invoices-list`, { headers: authHeaders }),
       ]);
       if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
       if (invRes.ok) setInvoices(await invRes.json());
@@ -157,7 +160,7 @@ export default function AccountingTab({ adminWpId, adminEmail, adminToken }: { a
   const generateInvoice = async (orderId: number) => {
     setInvoiceLoading(orderId);
     try {
-      const res = await fetch(`${BASE}&action=generate-invoice`, {
+      const res = await fetch(`${BASE}?action=generate-invoice`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId }),
@@ -174,12 +177,12 @@ export default function AccountingTab({ adminWpId, adminEmail, adminToken }: { a
   };
 
   const downloadInvoice = (orderId: number) => {
-    window.open(`${BASE}&action=download-invoice&orderId=${orderId}`, '_blank');
+    window.open(`${BASE}?action=download-invoice&orderId=${orderId}`, '_blank');
   };
 
   const exportCsv = async () => {
     setCsvExporting(true);
-    window.open(`${BASE}&action=export-accounting-csv&period=${period}`, '_blank');
+    window.open(`${BASE}?action=export-accounting-csv&period=${period}`, '_blank');
     setTimeout(() => setCsvExporting(false), 2000);
   };
 

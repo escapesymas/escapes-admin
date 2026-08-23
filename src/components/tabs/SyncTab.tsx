@@ -3,6 +3,28 @@ import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 
 /**
+ * Helper: build auth headers for admin API calls.
+ *
+ * Audit 2026-08-15, finding #52: VITE_ADMIN_KEY used to be baked into the
+ * admin bundle — anyone with read access to /assets could grab it and call
+ * /api/bihr/* freely. The admin UI now authenticates with a real admin JWT
+ * issued by /api/auth?action=login. The X-Admin-Key header is kept as an
+ * opt-in fallback for service-to-service scripts (curl, cron, etc.) but the
+ * frontend bundle MUST NOT need it.
+ */
+function getAdminAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  try {
+    const raw = localStorage.getItem('escapesymas_admin_session');
+    if (raw) {
+      const session = JSON.parse(raw);
+      if (session?.token) headers['Authorization'] = `Bearer ${session.token}`;
+    }
+  } catch {}
+  return headers;
+}
+
+/**
  * SyncTab — Consola de Sincronización del Catálogo Bihr
  *
  * Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.
@@ -38,7 +60,7 @@ const SyncTab = () => {
   const fetchSyncStatus = async () => {
     try {
       const res = await fetch('/api/bihr/sync-status', {
-        headers: { 'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || '' }
+        headers: getAdminAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -83,7 +105,7 @@ const SyncTab = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
+          ...getAdminAuthHeaders(),
         },
         body: JSON.stringify({ catalogType: type })
       });
@@ -108,7 +130,7 @@ const SyncTab = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
+          ...getAdminAuthHeaders(),
         },
         body: JSON.stringify({ batch: 5000, concurrency: 20, loopAll: true })
       });
@@ -134,7 +156,7 @@ const SyncTab = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Key': import.meta.env.VITE_ADMIN_KEY || ''
+          ...getAdminAuthHeaders(),
         }
       });
       if (res.ok) {
