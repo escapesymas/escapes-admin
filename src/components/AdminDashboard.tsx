@@ -20,6 +20,7 @@ import ConfirmModal from './modals/ConfirmModal';
 import ErrorBoundary from './ErrorBoundary';
 import { useToast } from './ToastContext';
 import { formatPrice, formatEuros } from '../utils/format';
+import { PushNotificationToggle } from './PushNotificationToggle';
 import type { Order, Product, User, Cart, CartItem, OrderNote, OrderItem, AdminSession } from '../types/admin';
 
 interface AdminDashboardProps {
@@ -440,6 +441,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'seo' && 'SEO Auto-Linking'}
               {activeTab === 'sync' && 'Consola de Sincronización (Bihr)'}
               {activeTab === 'margins' && 'Precios y Márgenes'}
+              {activeTab === 'notifications' && 'Notificaciones Push (iPhone)'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
               {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
             </h1>
@@ -453,6 +455,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'seo' && 'Gestiona el diccionario de palabras clave del enlazado interno dofollow.'}
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
+              {activeTab === 'notifications' && 'Configura y activa las alertas push instantáneas en tu dispositivo.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
             </p>
@@ -565,6 +568,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'margins' && (
           <MarginsTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} />
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="py-4">
+            <PushNotificationToggle token={adminToken} />
+          </div>
         )}
 
         {activeTab === 'accounting' && (
