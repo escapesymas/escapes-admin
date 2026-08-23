@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-tech-carbon text-tech-text font-sans selection:bg-tech-yellow selection:text-black;
   }
