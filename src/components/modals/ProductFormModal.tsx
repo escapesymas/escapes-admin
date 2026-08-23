@@ -131,14 +131,23 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
     }
   }, [mode, product]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Audit 2026-08-15, finding #16: el form dividía por 100 al cargar y
+// reenviaba la cifra en EUR al backend; multiplicar luego por 100 en el
+// backend daba una segunda conversión silenciosa. Contrato único: payload
+// en CENTS, DB en CENTS, form en EUR. Centralizamos la conversión.
+const toCents = (eurosStr: string): number => {
+  const n = parseFloat(eurosStr);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
+
+const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload = {
       id: product?.id,
       name,
       sku,
-      price,
-      salePrice: salePrice || null,
+      price: toCents(price),
+      salePrice: salePrice ? toCents(salePrice) : null,
       stock,
       stock_status: stockStatus,
       low_stock_threshold: lowStockThreshold,
@@ -149,7 +158,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
       brand,
       barcode,
       supplierCode,
-      cost: cost || null,
+      cost: cost ? toCents(cost) : null,
       weight_g: weightG || null,
       length_mm: lengthMm || null,
       width_mm: widthMm || null,
@@ -161,7 +170,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
       category2Id: category2Id || null,
       category3Id: category3Id || null,
       type: productType,
-      variations: productType === 'variable' ? variations : [],
+      variations: productType === 'variable' ? variations.map((v: any) => ({ ...v, price: toCents(v.price || '') })) : [],
       upsells,
       crossSells
     };

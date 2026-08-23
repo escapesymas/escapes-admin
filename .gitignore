@@ -3,5 +3,11 @@ node_modules/
 pnpm-workspace.yaml
 .gstack/
 .env.local
+.env.build
+*.env.build
+.env.production
 test-results/
+
+# Secretos (Bloque 0.6 auditoría 2026-08-15)
+**/secrets/
 
