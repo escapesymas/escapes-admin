@@ -172,3 +172,53 @@ export async function sendTestNotification(token?: string): Promise<void> {
     throw new Error(err.error || 'Error al enviar notificación de prueba');
   }
 }
+
+export interface NotificationPreferences {
+  new_order: boolean;
+  payment_failed: boolean;
+  abandoned_cart: boolean;
+  dropshipping_status: boolean;
+  new_user: boolean;
+  daily_summary: boolean;
+}
+
+/**
+ * Obtiene las preferencias de notificación desde el servidor
+ */
+export async function getPushPreferences(): Promise<NotificationPreferences | null> {
+  const subscription = await getCurrentSubscription();
+  if (!subscription) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/push/preferences?endpoint=${encodeURIComponent(subscription.endpoint)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.preferences || null;
+  } catch (err) {
+    console.error('Error al obtener preferencias:', err);
+    return null;
+  }
+}
+
+/**
+ * Guarda las preferencias de notificación en el servidor
+ */
+export async function updatePushPreferences(prefs: Partial<NotificationPreferences>): Promise<boolean> {
+  const subscription = await getCurrentSubscription();
+  if (!subscription) return false;
+
+  try {
+    const res = await fetch(`${API_BASE}/push/preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: subscription.endpoint,
+        preferences: prefs
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Error al actualizar preferencias:', err);
+    return false;
+  }
+}
