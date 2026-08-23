@@ -124,15 +124,19 @@ export interface UserBilling {
 
 export interface User {
   id: number;
+  username?: string;
   firstName?: string;
   lastName?: string;
   email: string;
   role: UserRole;
   billing?: UserBilling | string;
+  garage?: any;
   phone?: string;
   address?: string;
   city?: string;
   postcode?: string;
+  totalOrders?: number;
+  totalSpentCents?: number;
   createdAt?: string;
 }
 
