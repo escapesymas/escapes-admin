@@ -13,12 +13,22 @@ interface UsersTabProps {
   adminToken: string;
   onUserSaved: () => void;
   onSelectOrder?: (order: Order) => void;
+  onDeleteOrder?: (orderId: number) => void;
+  onCreateOrderForUser?: (user: User) => void;
 }
 
 type ViewMode = 'kanban' | 'list';
 type SortField = 'id' | 'name' | 'orders_desc' | 'orders_asc' | 'spent_desc' | 'spent_asc' | 'date_desc' | 'date_asc';
 
-export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminToken, onUserSaved, onSelectOrder }) => {
+export const UsersTab: React.FC<UsersTabProps> = ({ 
+  users, 
+  orders = [], 
+  adminToken, 
+  onUserSaved, 
+  onSelectOrder,
+  onDeleteOrder,
+  onCreateOrderForUser
+}) => {
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -1139,16 +1149,28 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                     </div>
                   )}
 
-                  {/* Tab 3: Histórico de Compras (LISTADO INTERACTIVO DE PEDIDOS) */}
+                  {/* Tab 3: Histórico de Compras (LISTADO INTERACTIVO DE PEDIDOS CON AÑADIR, EDITAR Y ELIMINAR) */}
                   {activeTab === 'orders' && (
                     <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 text-xs space-y-4">
-                      <div className="flex items-center justify-between border-b border-tech-border pb-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-tech-border pb-3 gap-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow flex items-center gap-2">
                           <Icons.ShoppingBag className="w-4 h-4" /> Histórico de Pedidos del Cliente ({userOrders.length})
                         </span>
-                        <span className="text-xs font-mono text-emerald-400 font-bold">
-                          Total Facturado: {((selectedUser.totalSpentCents || 0) / 100).toFixed(2)} €
-                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-emerald-400 font-bold">
+                            Total Facturado: {((selectedUser.totalSpentCents || 0) / 100).toFixed(2)} €
+                          </span>
+                          {onCreateOrderForUser && (
+                            <button
+                              onClick={() => onCreateOrderForUser(selectedUser)}
+                              className="px-3 py-1.5 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-lg font-black uppercase text-[10px] tracking-wider transition-all inline-flex items-center gap-1.5 shadow"
+                            >
+                              <Icons.Plus className="w-3.5 h-3.5" />
+                              Crear Pedido
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {userOrders.length === 0 ? (
@@ -1165,7 +1187,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                                 <th className="pb-3">Importe</th>
                                 <th className="pb-3">Estado</th>
                                 <th className="pb-3">Dropshipping (Bihr)</th>
-                                <th className="pb-3 text-right">Acción</th>
+                                <th className="pb-3 text-right">Acciones</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-zinc-900/50">
@@ -1183,18 +1205,31 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, orders = [], adminTok
                                     />
                                   </td>
                                   <td className="py-3 text-right">
-                                    <button
-                                      onClick={() => {
-                                        if (onSelectOrder) {
-                                          setSelectedUser(null);
-                                          onSelectOrder(ord);
-                                        }
-                                      }}
-                                      className="px-3 py-1.5 bg-tech-yellow text-tech-carbon hover:bg-yellow-500 rounded-lg font-black uppercase text-[10px] tracking-wider transition-all inline-flex items-center gap-1 shadow"
-                                    >
-                                      <Icons.ExternalLink className="w-3 h-3" />
-                                      Gestionar
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => {
+                                          if (onSelectOrder) {
+                                            setSelectedUser(null);
+                                            onSelectOrder(ord);
+                                          }
+                                        }}
+                                        className="px-2.5 py-1.5 bg-[#1a1b1e] hover:bg-tech-border text-tech-text border border-tech-border rounded-lg font-bold uppercase text-[10px] tracking-wider transition-all inline-flex items-center gap-1"
+                                        title="Editar detalles del pedido"
+                                      >
+                                        <Icons.Edit2 className="w-3 h-3" />
+                                        Editar
+                                      </button>
+
+                                      {onDeleteOrder && (
+                                        <button
+                                          onClick={() => onDeleteOrder(ord.id)}
+                                          className="p-1.5 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 rounded-lg transition-all"
+                                          title="Eliminar pedido"
+                                        >
+                                          <Icons.Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
