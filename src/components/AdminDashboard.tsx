@@ -163,6 +163,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
     try {
       // 2. Fetch Orders List
       const ordersRes = await fetch(`/api/admin?action=orders-list`, { headers: authHeaders() });
+      if (ordersRes.status === 401) {
+        onLogout();
+        return;
+      }
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
         setOrders(Array.isArray(ordersData) ? ordersData : (ordersData.orders || []));
@@ -170,6 +174,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
       // 3. Fetch Users List
       const usersRes = await fetch(`/api/admin?action=users-list`, { headers: authHeaders() });
+      if (usersRes.status === 401) {
+        onLogout();
+        return;
+      }
       if (usersRes.ok) {
         const usersData = await usersRes.json();
         setUsers(Array.isArray(usersData) ? usersData : []);
@@ -177,6 +185,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
       // 4. Fetch Carts List
       const cartsRes = await fetch(`/api/admin?action=carts-list`, { headers: authHeaders() });
+      if (cartsRes.status === 401) {
+        onLogout();
+        return;
+      }
       if (cartsRes.ok) {
         const cartsData = await cartsRes.json();
         setCarts(Array.isArray(cartsData) ? cartsData : []);
