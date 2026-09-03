@@ -7,17 +7,96 @@ interface OrderCreationModalProps {
   adminWpId: string;
   adminEmail: string;
   adminToken: string;
+  initialUser?: any;
   onClose: () => void;
   onSuccess: () => void;
   showToast: (msg: string, type?: 'success' | 'error') => void;
 }
 
-const OrderCreationModal: React.FC<OrderCreationModalProps> = ({ adminWpId, adminEmail, adminToken, onClose, onSuccess, showToast }) => {
+const OrderCreationModal: React.FC<OrderCreationModalProps> = ({ 
+  adminWpId, 
+  adminEmail, 
+  adminToken, 
+  initialUser,
+  onClose, 
+  onSuccess, 
+  showToast 
+}) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Extraer lista de direcciones del usuario si viene prop initialUser
+  const userAddresses = React.useMemo(() => {
+    if (!initialUser) return [];
+    const billingRaw = initialUser.billing;
+    const parsed = typeof billingRaw === 'string'
+      ? (() => { try { return JSON.parse(billingRaw); } catch { return {}; } })()
+      : (billingRaw || {});
+
+    const list: any[] = [];
+    if (Array.isArray(parsed.addresses)) {
+      list.push(...parsed.addresses);
+    }
+    // Si tiene campos principales y no están en el array
+    if (parsed.address_1 && !list.some(a => a.address_1 === parsed.address_1)) {
+      list.unshift({
+        id: 'main-billing',
+        alias: 'Principal / Facturación',
+        type: 'envio',
+        address_1: parsed.address_1,
+        city: parsed.city || '',
+        postcode: parsed.postcode || '',
+        phone: parsed.phone || initialUser.phone || ''
+      });
+    }
+    return list;
+  }, [initialUser]);
+
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(
+    userAddresses.length > 0 ? userAddresses[0].id : 'custom'
+  );
+
   // Formularios
-  const [customer, setCustomer] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', zip: '' });
+  const [customer, setCustomer] = useState(() => {
+    if (initialUser) {
+      const firstAddr = userAddresses[0] || {};
+      return {
+        firstName: initialUser.firstName || '',
+        lastName: initialUser.lastName || '',
+        email: initialUser.email || '',
+        phone: firstAddr.phone || initialUser.phone || '',
+        address: firstAddr.address_1 || initialUser.address || '',
+        city: firstAddr.city || initialUser.city || '',
+        zip: firstAddr.postcode || initialUser.postcode || ''
+      };
+    }
+    return { firstName: '', lastName: '', email: '', phone: '', address: '', city: '', zip: '' };
+  });
+
+  // Al cambiar la dirección seleccionada del desplegable
+  const handleAddressSelectChange = (id: string) => {
+    setSelectedAddressId(id);
+    if (id === 'custom') {
+      // Limpiar campos de dirección para introducida manualmente
+      setCustomer(prev => ({
+        ...prev,
+        address: '',
+        city: '',
+        zip: ''
+      }));
+    } else {
+      const found = userAddresses.find(a => a.id === id);
+      if (found) {
+        setCustomer(prev => ({
+          ...prev,
+          address: found.address_1 || '',
+          city: found.city || '',
+          zip: found.postcode || '',
+          phone: found.phone || prev.phone
+        }));
+      }
+    }
+  };
 
   // Productos a añadir (búsqueda)
   const [productSearch, setProductSearch] = useState('');
@@ -164,7 +243,36 @@ const OrderCreationModal: React.FC<OrderCreationModalProps> = ({ adminWpId, admi
 
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
-            <h4 className="text-xs font-black uppercase tracking-widest text-tech-muted">1. Datos del Cliente</h4>
+            <div className="flex justify-between items-center">
+              <h4 className="text-xs font-black uppercase tracking-widest text-tech-muted">1. Datos del Cliente</h4>
+              {initialUser && (
+                <span className="text-[10px] font-mono text-tech-yellow bg-tech-yellow/10 border border-tech-yellow/20 px-2 py-0.5 rounded uppercase font-bold">
+                  Cliente registrado #{initialUser.id}
+                </span>
+              )}
+            </div>
+
+            {/* Selector de Dirección Guardada si el cliente tiene direcciones registradas */}
+            {userAddresses.length > 0 && (
+              <div className="bg-[#1a1b1e]/70 border border-tech-border p-4 rounded-xl space-y-2">
+                <label className="block text-[10px] font-black uppercase tracking-wider text-tech-yellow flex items-center gap-1.5">
+                  <Icons.MapPin className="w-3.5 h-3.5" /> Seleccionar Dirección del Cliente
+                </label>
+                <select
+                  value={selectedAddressId}
+                  onChange={(e) => handleAddressSelectChange(e.target.value)}
+                  className="w-full bg-tech-carbon border border-tech-border rounded-lg px-3 py-2 text-xs text-tech-text focus:border-tech-yellow outline-none font-medium"
+                >
+                  {userAddresses.map((addr) => (
+                    <option key={addr.id} value={addr.id}>
+                      📍 {addr.alias || 'Dirección'} — {addr.address_1}, {addr.city} ({addr.postcode})
+                    </option>
+                  ))}
+                  <option value="custom">➕ Introducir una nueva dirección para este pedido</option>
+                </select>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nombre</label>
@@ -183,8 +291,10 @@ const OrderCreationModal: React.FC<OrderCreationModalProps> = ({ adminWpId, admi
                 <input type="tel" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} className="w-full bg-[#1a1b1e] border border-tech-border rounded-xl p-3 text-tech-text focus:border-tech-yellow outline-none" placeholder="+34 600 000 000" />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Dirección</label>
-                <input type="text" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} className="w-full bg-[#1a1b1e] border border-tech-border rounded-xl p-3 text-tech-text focus:border-tech-yellow outline-none" placeholder="Calle, Número, Piso..." />
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
+                  {selectedAddressId === 'custom' ? 'Nueva Dirección / Calle y Número' : 'Dirección Seleccionada'}
+                </label>
+                <input type="text" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} className="w-full bg-[#1a1b1e] border border-tech-border rounded-xl p-3 text-tech-text focus:border-tech-yellow outline-none font-medium" placeholder="Calle, Número, Piso..." />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Ciudad</label>

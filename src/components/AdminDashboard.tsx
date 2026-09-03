@@ -66,6 +66,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [showProductDetail, setShowProductDetail] = useState(false);
   const [selectedDetailProductId, setSelectedDetailProductId] = useState<number | null>(null);
   const [showOrderCreationModal, setShowOrderCreationModal] = useState(false);
+  const [initialUserForOrder, setInitialUserForOrder] = useState<User | null>(null);
 
   // Orders Search & Filtering
   const [orderSearch, setOrderSearch] = useState('');
@@ -78,6 +79,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [showRefundConfirm, setShowRefundConfirm] = useState(false);
+
+  // States for modifying order items inside modal
+  const [isEditingOrderItems, setIsEditingOrderItems] = useState(false);
+  const [editingOrderItems, setEditingOrderItems] = useState<any[]>([]);
+  const [orderProductSearch, setOrderProductSearch] = useState('');
+  const [orderSearchResults, setOrderSearchResults] = useState<Product[]>([]);
+  const [isSavingOrderItems, setIsSavingOrderItems] = useState(false);
 
   // React State-Based Confirmations (Bypasses Native Browser Dialog Blocks)
   const [orderDeletingId, setOrderDeletingId] = useState<number | null>(null);
@@ -197,6 +205,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
   useEffect(() => {
     if (selectedOrder) {
+      setEditingOrderItems(
+        selectedOrder.items.map(it => ({
+          id: it.id,
+          product_id: it.product_id,
+          product_name: it.product_name || 'Producto N/D',
+          quantity: it.quantity,
+          price: it.price
+        }))
+      );
+      setIsEditingOrderItems(false);
+      setOrderProductSearch('');
+      setOrderSearchResults([]);
+
       fetch(`/api/admin?action=get-order-notes&orderId=${selectedOrder.id}`, { headers: authHeaders() })
         .then(res => res.json())
         .then(data => { if(Array.isArray(data)) setOrderNotes(data); });
@@ -205,8 +226,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       setNewNote('');
       setRefundAmount('');
       setRefundReason('');
+      setIsEditingOrderItems(false);
+      setEditingOrderItems([]);
     }
   }, [selectedOrder]);
+
+  useEffect(() => {
+    if (orderProductSearch.trim().length < 3) {
+      setOrderSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin?action=products-list&search=${encodeURIComponent(orderProductSearch)}&limit=10`, {
+          headers: authHeaders()
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.products || []);
+          setOrderSearchResults(list);
+        }
+      } catch (err) {
+        console.error("Error buscando productos para el pedido", err);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [orderProductSearch]);
 
   useEffect(() => {
     if (activeTab === 'products') {
@@ -540,6 +585,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             adminToken={adminToken}
             onUserSaved={() => fetchData(true)}
             onSelectOrder={(order) => setSelectedOrder(order)}
+            onDeleteOrder={(id) => setOrderDeletingId(id)}
+            onCreateOrderForUser={(user) => {
+              setInitialUserForOrder(user);
+              setShowOrderCreationModal(true);
+            }}
           />
         )}
 
@@ -658,25 +708,237 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
             {/* Order Items */}
             <div className="border border-tech-border rounded-xl overflow-hidden mb-8">
-              <div className="bg-[#1a1b1e]/30 p-3 border-b border-tech-border text-[10px] uppercase font-black tracking-widest text-tech-muted">
-                Productos Comprados
-              </div>
-              <div className="divide-y divide-zinc-900/60 bg-tech-card">
-                {selectedOrder.items.map((item: OrderItem) => (
-                  <div key={item.id} className="p-4 flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-3">
-                      <span className="bg-[#1a1b1e] border border-tech-border text-[#cbd5e1] w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold">
-                        {item.quantity}x
-                      </span>
-                      <span className="text-zinc-300 font-medium">{item.product_name || 'Producto N/D'}</span>
-                    </div>
-                    <span className="font-black text-tech-text italic">{formatPrice(item.price)}</span>
+              <div className="bg-[#1a1b1e]/30 p-3 border-b border-tech-border flex justify-between items-center text-[10px] uppercase font-black tracking-widest text-tech-muted">
+                <span>Productos Comprados</span>
+                {!isEditingOrderItems ? (
+                  <button
+                    onClick={() => {
+                      setEditingOrderItems(
+                        selectedOrder.items.map(it => ({
+                          id: it.id,
+                          product_id: it.product_id,
+                          product_name: it.product_name || 'Producto N/D',
+                          quantity: it.quantity,
+                          price: it.price
+                        }))
+                      );
+                      setIsEditingOrderItems(true);
+                    }}
+                    className="text-tech-yellow hover:text-orange-400 font-bold uppercase tracking-wider flex items-center gap-1 transition-all"
+                  >
+                    <Icons.Edit3 className="w-3.5 h-3.5" /> Modificar Productos
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setIsEditingOrderItems(false);
+                        setEditingOrderItems(
+                          selectedOrder.items.map(it => ({
+                            id: it.id,
+                            product_id: it.product_id,
+                            product_name: it.product_name || 'Producto N/D',
+                            quantity: it.quantity,
+                            price: it.price
+                          }))
+                        );
+                        setOrderProductSearch('');
+                        setOrderSearchResults([]);
+                      }}
+                      className="text-zinc-400 hover:text-zinc-200 font-bold uppercase tracking-wider text-[9px] px-2 py-1 rounded bg-[#1a1b1e] border border-tech-border"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (editingOrderItems.length === 0) {
+                          showToast('El pedido debe tener al menos un producto.', 'error');
+                          return;
+                        }
+                        setIsSavingOrderItems(true);
+                        try {
+                          const res = await fetch(`/api/admin?action=update-order-items`, {
+                            method: 'POST',
+                            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              orderId: selectedOrder.id,
+                              items: editingOrderItems
+                            })
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            showToast('Productos del pedido actualizados con éxito.', 'success');
+                            setSelectedOrder({
+                              ...selectedOrder,
+                              subtotal: data.subtotal,
+                              total: data.total,
+                              items: data.items
+                            });
+                            setIsEditingOrderItems(false);
+                            fetchData(true);
+                          } else {
+                            showToast(data.error || 'Error al actualizar los productos del pedido', 'error');
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          showToast('Error de conexión al actualizar productos', 'error');
+                        } finally {
+                          setIsSavingOrderItems(false);
+                        }
+                      }}
+                      disabled={isSavingOrderItems}
+                      className="bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1"
+                    >
+                      {isSavingOrderItems ? <Icons.Loader2 className="w-3 h-3 animate-spin" /> : <Icons.Check className="w-3 h-3" />}
+                      Guardar Cambios
+                    </button>
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Buscador predictivo cuando se está en modo edición */}
+              {isEditingOrderItems && (
+                <div className="p-3 bg-[#1a1b1e]/60 border-b border-tech-border relative">
+                  <div className="relative">
+                    <Icons.Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-tech-muted" />
+                    <input
+                      type="text"
+                      value={orderProductSearch}
+                      onChange={(e) => setOrderProductSearch(e.target.value)}
+                      placeholder="Añadir producto: Buscar por SKU o nombre..."
+                      className="w-full bg-tech-card border border-tech-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-tech-text focus:outline-none focus:border-tech-yellow"
+                    />
+                  </div>
+                  {orderSearchResults.length > 0 && (
+                    <div className="absolute top-full left-3 right-3 mt-1 bg-[#1a1b1e] border border-tech-border rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-zinc-800">
+                      {orderSearchResults.map(p => (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            const existsIndex = editingOrderItems.findIndex(i => i.product_id === p.id);
+                            if (existsIndex >= 0) {
+                              const updated = [...editingOrderItems];
+                              updated[existsIndex].quantity += 1;
+                              setEditingOrderItems(updated);
+                            } else {
+                              setEditingOrderItems([
+                                ...editingOrderItems,
+                                {
+                                  product_id: p.id,
+                                  product_name: p.name,
+                                  quantity: 1,
+                                  price: p.price || 0
+                                }
+                              ]);
+                            }
+                            setOrderProductSearch('');
+                            setOrderSearchResults([]);
+                          }}
+                          className="p-2.5 hover:bg-tech-border cursor-pointer flex justify-between items-center text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-zinc-300">{p.name}</span>
+                            <span className="text-[10px] font-mono text-zinc-500">({p.sku})</span>
+                          </div>
+                          <span className="font-black text-tech-yellow">{formatPrice(p.price || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Lista de productos */}
+              <div className="divide-y divide-zinc-900/60 bg-tech-card">
+                {!isEditingOrderItems ? (
+                  selectedOrder.items.map((item: OrderItem) => (
+                    <div key={item.id} className="p-4 flex justify-between items-center text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="bg-[#1a1b1e] border border-tech-border text-[#cbd5e1] w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold">
+                          {item.quantity}x
+                        </span>
+                        <span className="text-zinc-300 font-medium">{item.product_name || 'Producto N/D'}</span>
+                      </div>
+                      <span className="font-black text-tech-text italic">{formatPrice(item.price)}</span>
+                    </div>
+                  ))
+                ) : (
+                  editingOrderItems.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-zinc-500 italic">No hay productos en el pedido. Usa el buscador superior para añadir alguno.</div>
+                  ) : (
+                    editingOrderItems.map((item, idx) => (
+                      <div key={idx} className="p-3 flex justify-between items-center text-xs gap-3">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-zinc-300 font-medium truncate">{item.product_name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {/* Control de cantidad */}
+                          <div className="flex items-center border border-tech-border rounded-lg bg-[#1a1b1e] overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newQty = Math.max(1, item.quantity - 1);
+                                const updated = [...editingOrderItems];
+                                updated[idx].quantity = newQty;
+                                setEditingOrderItems(updated);
+                              }}
+                              className="px-2 py-1 text-zinc-400 hover:text-white font-bold hover:bg-tech-border"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value) || 1);
+                                const updated = [...editingOrderItems];
+                                updated[idx].quantity = val;
+                                setEditingOrderItems(updated);
+                              }}
+                              className="w-10 text-center bg-transparent text-xs font-bold text-tech-text outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...editingOrderItems];
+                                updated[idx].quantity += 1;
+                                setEditingOrderItems(updated);
+                              }}
+                              className="px-2 py-1 text-zinc-400 hover:text-white font-bold hover:bg-tech-border"
+                            >
+                              +
+                            </button>
+                          </div>
+                          {/* Precio unitario */}
+                          <span className="font-black text-tech-text italic w-20 text-right">
+                            {formatPrice(item.price * item.quantity)}
+                          </span>
+                          {/* Eliminar ítem */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingOrderItems(editingOrderItems.filter((_, i) => i !== idx));
+                            }}
+                            className="text-red-500 hover:text-red-400 p-1 transition-all"
+                            title="Eliminar producto del pedido"
+                          >
+                            <Icons.Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )
+                )}
               </div>
               <div className="bg-[#1a1b1e]/40 p-4 border-t border-tech-border flex justify-between items-center text-sm">
                 <span className="font-bold text-[#cbd5e1]">Total Facturado</span>
-                <span className="text-xl font-black italic text-tech-yellow">{formatPrice(selectedOrder.total)}</span>
+                <span className="text-xl font-black italic text-tech-yellow">
+                  {!isEditingOrderItems 
+                    ? formatPrice(selectedOrder.total) 
+                    : formatPrice(editingOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0))
+                  }
+                </span>
               </div>
             </div>
 
@@ -987,9 +1249,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           adminWpId={adminWpId}
           adminEmail={adminEmail}
           adminToken={adminToken}
-          onClose={() => setShowOrderCreationModal(false)}
+          initialUser={initialUserForOrder}
+          onClose={() => {
+            setShowOrderCreationModal(false);
+            setInitialUserForOrder(null);
+          }}
           onSuccess={() => {
             setShowOrderCreationModal(false);
+            setInitialUserForOrder(null);
             fetchData();
           }}
           showToast={showToast}
