@@ -10,6 +10,7 @@ export interface ShippingData {
 
 export interface OrderItem {
   id: number;
+  product_id?: number;
   product_name?: string;
   quantity: number;
   price: number;
@@ -215,6 +216,9 @@ export interface SeoLink {
 }
 
 export interface AdminSession {
+  /** JWT de admin devuelto por /api/auth?action=login */
+  token?: string;
+  jwt?: string;
   user_id?: string;
   user_email?: string;
   wp_id?: string;

@@ -532,9 +532,11 @@ const SyncTab = () => {
           <button
             onClick={async () => {
               try {
-                const res = await fetch(`/api/admin?action=sync-stock-bihr`, {
+                // La acción 'sync-stock-bihr' no existía y adminToken no estaba
+                // definido: el botón siempre fallaba.
+                const res = await fetch('/api/admin/sync-bihr-stock', {
                   method: 'POST',
-                  headers: { 'Authorization': `Bearer ${adminToken}` }
+                  headers: getAdminAuthHeaders()
                 });
                 if (res.ok) {
                   showToast('Sincronización de stock Bihr iniciada correctamente');

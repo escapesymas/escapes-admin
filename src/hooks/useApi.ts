@@ -10,7 +10,7 @@ const fetcher = (url: string, token: string) => fetch(url, {
 export function useApi<T>(action: string | null, token: string = '') {
   const { data, error, isLoading, mutate } = useSWR<T>(
     action ? [`/api/admin?action=${action}`, token] : null,
-    ([url, tok]) => fetcher(url, tok || ''),
+    ([url, tok]: [string, string]) => fetcher(url, tok || ''),
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   );
   return { data, error, isLoading, mutate };
@@ -20,7 +20,7 @@ export function useApiWithParams<T>(action: string, params: Record<string, strin
   const query = new URLSearchParams({ action, ...params }).toString();
   const { data, error, isLoading, mutate } = useSWR<T>(
     [`/api/admin?${query}`, token],
-    ([url, tok]) => fetcher(url, tok || ''),
+    ([url, tok]: [string, string]) => fetcher(url, tok || ''),
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   );
   return { data, error, isLoading, mutate };
