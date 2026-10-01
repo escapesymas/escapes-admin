@@ -11,3 +11,6 @@ test-results/
 # Secretos (Bloque 0.6 auditoría 2026-08-15)
 **/secrets/
 
+
+# Secretos / documentación de infraestructura local
+escapesymas-infra-reference.md
