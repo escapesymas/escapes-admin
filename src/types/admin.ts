@@ -68,6 +68,9 @@ export interface LinkedProduct {
 }
 
 export interface Product {
+  /** Código de modelo: agrupa variantes (talla/color) en una sola ficha */
+  family_code?: string | null;
+  variant_options?: Record<string, string> | null;
   id: number;
   name: string;
   sku: string;

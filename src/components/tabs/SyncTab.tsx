@@ -553,8 +553,88 @@ const SyncTab = () => {
           </button>
         </div>
       </div>
+
+      <CatalogEnrichPanel />
     </div>
   );
 };
+
+interface EnrichState {
+  status: 'idle' | 'running' | 'done' | 'error';
+  startedAt?: string;
+  finishedAt?: string;
+  stats?: { matched: number; withVariants: number; duplicates: number; imagesCopied: number; compatCopied: number };
+  error?: string;
+}
+
+/** Agrupa variantes (talla/color), añade atributos y archiva duplicados. */
+function CatalogEnrichPanel() {
+  const { showToast } = useToast();
+  const [state, setState] = useState<EnrichState>({ status: 'idle' });
+
+  const load = async () => {
+    try {
+      const r = await fetch('/api/admin/catalog/enrich', { headers: getAdminAuthHeaders() });
+      if (r.ok) setState(await r.json());
+    } catch { /* sin conexión: se reintenta en el siguiente ciclo */ }
+  };
+
+  useEffect(() => {
+    load();
+    const t = setInterval(() => { if (state.status === 'running') load(); }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
+
+  const start = async () => {
+    const r = await fetch('/api/admin/catalog/enrich', { method: 'POST', headers: getAdminAuthHeaders() });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) {
+      setState(data);
+      showToast('Agrupación de variantes iniciada. Tarda varios minutos.');
+    } else {
+      showToast(data.error || 'No se pudo iniciar', 'error');
+    }
+  };
+
+  return (
+    <div className="bg-tech-card border border-tech-border rounded-2xl p-6 shadow-lg shadow-black/40 space-y-4">
+      <div>
+        <h3 className="text-md font-black uppercase tracking-tighter italic text-zinc-200 flex items-center gap-2">
+          <Icons.Layers className="w-5 h-5 text-tech-yellow" /> Variantes y duplicados del catálogo
+        </h3>
+        <p className="text-[10px] text-tech-muted mt-1 leading-relaxed">
+          Agrupa tallas y colores de un mismo modelo en una sola ficha, añade atributos de filtro y archiva las fichas
+          duplicadas (sin borrar nada). Se ejecuta solo tras cada sincronización de catálogo; aquí puedes relanzarlo.
+        </p>
+      </div>
+      <div className="bg-[#1a1b1e] border border-tech-border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
+        <div className="space-y-1">
+          <div>
+            <span className="text-tech-muted">Estado:</span>{' '}
+            <span className="font-bold text-tech-text">
+              {{ idle: 'Sin ejecutar', running: 'En curso…', done: 'Completado', error: 'Error' }[state.status]}
+            </span>
+            {state.finishedAt && <span className="text-tech-muted ml-2">{new Date(state.finishedAt).toLocaleString('es-ES')}</span>}
+          </div>
+          {state.stats && (
+            <div className="text-tech-muted font-mono text-[10px]">
+              {state.stats.matched} fichas actualizadas · {state.stats.withVariants} con talla/color · {state.stats.duplicates} duplicados archivados
+            </div>
+          )}
+          {state.error && <div className="text-red-400 text-[10px]">{state.error}</div>}
+        </div>
+        <button
+          type="button"
+          disabled={state.status === 'running'}
+          onClick={start}
+          className="bg-tech-yellow/15 hover:bg-tech-yellow/25 text-tech-yellow border border-tech-yellow/30 px-4 py-2 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 disabled:opacity-50"
+        >
+          <Icons.Layers size={14} /> Agrupar variantes ahora
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default SyncTab;

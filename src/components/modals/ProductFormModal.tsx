@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
-import type { AdminSession, Product, ProductImage, ProductCompatibilityEntry, LinkedProduct, Variation, GlobalAttribute, Category, VehicleBrand, VehicleModel, AttributeTerm, VariationAttribute } from '../../types/admin';
+import type { AdminSession, Product, ProductImage, ProductCompatibilityEntry, LinkedProduct, Category, VehicleBrand, VehicleModel } from '../../types/admin';
 
 interface ProductFormModalProps {
   session: AdminSession;
@@ -8,6 +8,17 @@ interface ProductFormModalProps {
   product: Product | null;
   onClose: () => void;
   onSubmit: (payload: any) => void;
+}
+
+interface FamilySibling {
+  id: number;
+  sku: string;
+  name: string;
+  price: number;
+  sale_price: number | null;
+  stock: number;
+  status: string;
+  variant_options: Record<string, string> | null;
 }
 
 const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, product, onClose, onSubmit }) => {
@@ -51,9 +62,12 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
 
   const [draggedImgIndex, setDraggedImgIndex] = useState<number | null>(null);
 
-  const [productType, setProductType] = useState('simple');
-  const [variations, setVariations] = useState<Variation[]>([]);
-  const [globalAttributes, setGlobalAttributes] = useState<GlobalAttribute[]>([]);
+  // Variantes: productos con el mismo código de modelo se muestran juntos en la
+  // tienda, con selector de talla/color (ver backend lib/catalog-query.ts).
+  const [familyCode, setFamilyCode] = useState('');
+  const [variantTalla, setVariantTalla] = useState('');
+  const [variantColor, setVariantColor] = useState('');
+  const [familySiblings, setFamilySiblings] = useState<FamilySibling[]>([]);
 
   const [vehicleBrands, setVehicleBrands] = useState<VehicleBrand[]>([]);
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
@@ -64,11 +78,6 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
     const adminToken = session?.token || session?.jwt || '';
 
     if (!adminToken) return;
-
-    fetch(`/api/admin?action=get-attributes`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
-      .then(r => r.json())
-      .then(data => setGlobalAttributes(Array.isArray(data) ? data : []))
-      .catch(err => console.error(err));
 
     fetch(`/api/admin?action=get-vehicle-brands`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
       .then(r => r.json())
@@ -119,15 +128,21 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
       setCategory2Id(product.category2_id ? product.category2_id.toString() : '');
       setCategory3Id(product.category3_id ? product.category3_id.toString() : '');
 
-      if (product.type === 'variable') {
-        setProductType('variable');
-        fetch(`/api/admin?action=get-product-variations&product_id=${product.id}`)
-          .then(r => r.json())
-          .then(data => setVariations(data || []))
-          .catch(err => console.error(err));
-      } else {
-        setProductType('simple');
-      }
+      setFamilyCode(product.family_code || '');
+      setVariantTalla(product.variant_options?.Talla || '');
+      setVariantColor(product.variant_options?.Color || '');
+      const token = session?.token || session?.jwt || '';
+      fetch(`/api/admin?action=product-family&product_id=${product.id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => (r.ok ? r.json() : []))
+        .then((rows: FamilySibling[]) => {
+          setFamilySiblings(Array.isArray(rows) ? rows : []);
+          const self = Array.isArray(rows) ? rows.find((r) => r.id === product.id) : undefined;
+          if (self && !product.variant_options) {
+            setVariantTalla(self.variant_options?.Talla || '');
+            setVariantColor(self.variant_options?.Color || '');
+          }
+        })
+        .catch(() => setFamilySiblings([]));
     }
   }, [mode, product]);
 
@@ -169,8 +184,9 @@ const handleSubmit = (e: React.FormEvent) => {
       categoryId: categoryId || null,
       category2Id: category2Id || null,
       category3Id: category3Id || null,
-      type: productType,
-      variations: productType === 'variable' ? variations.map((v: any) => ({ ...v, price: toCents(v.price || '') })) : [],
+      type: 'simple',
+      familyCode,
+      variantOptions: { Talla: variantTalla, Color: variantColor },
       upsells,
       crossSells
     };
@@ -243,22 +259,7 @@ const handleSubmit = (e: React.FormEvent) => {
             </div>
           </div>
 
-          <div>
-            <label className={labelClass}>Tipo de Producto</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-tech-text cursor-pointer">
-                <input type="radio" value="simple" checked={productType === 'simple'} onChange={(e) => setProductType(e.target.value)} className="accent-tech-yellow" />
-                Producto Simple
-              </label>
-              <label className="flex items-center gap-2 text-tech-text cursor-pointer">
-                <input type="radio" value="variable" checked={productType === 'variable'} onChange={(e) => setProductType(e.target.value)} className="accent-tech-yellow" />
-                Producto Variable
-              </label>
-            </div>
-          </div>
-
-          {productType === 'simple' ? (
-            <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={labelClass}>Precio Base (€)</label>
                 <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required className={monoInputClass} />
@@ -280,56 +281,51 @@ const handleSubmit = (e: React.FormEvent) => {
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="bg-[#1a1b1e] border border-tech-border rounded-xl p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-tech-text uppercase">Variaciones</h4>
-                <button type="button" onClick={() => setVariations([...variations, { id: Date.now() + Math.random(), sku: '', price: '', stock_quantity: 0, stock_status: 'instock', attributes: [] }])} className="text-[10px] bg-zinc-800 text-white px-3 py-1.5 rounded-lg hover:bg-zinc-700">
-                  + Añadir Variación
-                </button>
+
+          {/* Variantes (talla/color) */}
+          <div className="border border-tech-border rounded-xl p-4 bg-[#1a1b1e]/10">
+            <h4 className={labelClass + " mb-1 flex items-center gap-1.5"}>
+              <Icons.Layers size={12} /> Variantes
+            </h4>
+            <p className="text-[10px] text-tech-muted mb-3">
+              Los productos con el mismo código de modelo aparecen como una sola ficha en la tienda, con selector de talla y color.
+              Los de Bihr se agrupan solos al importar.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={labelClass}>Código de modelo</label>
+                <input type="text" value={familyCode} onChange={(e) => setFamilyCode(e.target.value)} placeholder="Vacío = producto suelto" className={monoInputClass} />
               </div>
-              {variations.map((v, i) => (
-                <div key={v.id} className="grid grid-cols-4 gap-3 mb-3 pb-3 border-b border-zinc-800 last:border-0 last:mb-0 last:pb-0 items-end">
-                  <div className="col-span-4 flex gap-2">
-                    {globalAttributes.map(attr => (
-                      <select key={attr.id}
-                        className="bg-zinc-900 border border-tech-border text-tech-text text-[10px] rounded p-1"
-                        value={v.attributes?.find((a: VariationAttribute) => a.attribute_id === attr.id)?.term_id || ''}
-                        onChange={(e) => {
-                          const newAttrs = v.attributes?.filter((a: VariationAttribute) => a.attribute_id !== attr.id) || [];
-                          if (e.target.value) {
-                            newAttrs.push({ attribute_id: attr.id, term_id: parseInt(e.target.value) });
-                          }
-                          const newVars = [...variations];
-                          newVars[i].attributes = newAttrs;
-                          setVariations(newVars);
-                        }}
-                      >
-                        <option value="">{attr.name}...</option>
-                        {attr.terms?.map((t: AttributeTerm) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-tech-muted uppercase">SKU</label>
-                    <input type="text" value={v.sku || ''} onChange={e => { const nv=[...variations]; nv[i].sku=e.target.value; setVariations(nv); }} className={monoInputClass + ' !py-1'} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-tech-muted uppercase">Precio (€)</label>
-                    <input type="number" step="0.01" value={v.price || ''} onChange={e => { const nv=[...variations]; nv[i].price=e.target.value; setVariations(nv); }} className={monoInputClass + ' !py-1'} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-tech-muted uppercase">Stock</label>
-                    <input type="number" value={v.stock_quantity || ''} onChange={e => { const nv=[...variations]; nv[i].stock_quantity=Number(e.target.value); setVariations(nv); }} className={monoInputClass + ' !py-1'} />
-                  </div>
-                  <div className="flex items-center justify-end">
-                    <button type="button" onClick={() => setVariations(variations.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400 p-1"><Icons.Trash2 size={14}/></button>
-                  </div>
-                </div>
-              ))}
-              {variations.length === 0 && <div className="text-center text-xs text-tech-muted italic">No hay variaciones creadas.</div>}
+              <div>
+                <label className={labelClass}>Talla</label>
+                <input type="text" value={variantTalla} onChange={(e) => setVariantTalla(e.target.value)} placeholder="Ej. XL, 42, 10/L" className={monoInputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Color</label>
+                <input type="text" value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Ej. Negro" className={inputClass} />
+              </div>
             </div>
-          )}
+            {familySiblings.length > 1 && (
+              <div className="mt-3 max-h-48 overflow-y-auto border border-tech-border rounded-lg">
+                <table className="w-full text-[10px] font-mono">
+                  <thead className="text-tech-muted uppercase">
+                    <tr><th className="text-left p-1.5">SKU</th><th className="text-left p-1.5">Talla</th><th className="text-left p-1.5">Color</th><th className="text-right p-1.5">Precio</th><th className="text-right p-1.5">Stock</th></tr>
+                  </thead>
+                  <tbody>
+                    {familySiblings.map((v) => (
+                      <tr key={v.id} className={`border-t border-tech-border ${v.id === product?.id ? 'text-tech-yellow' : 'text-tech-text'}`}>
+                        <td className="p-1.5">{v.sku}</td>
+                        <td className="p-1.5">{v.variant_options?.Talla || '—'}</td>
+                        <td className="p-1.5">{v.variant_options?.Color || '—'}</td>
+                        <td className="p-1.5 text-right">{((v.sale_price || v.price) / 100).toFixed(2)} €</td>
+                        <td className="p-1.5 text-right">{v.stock}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           {/* Categorías */}
           <div className="border border-tech-border rounded-xl p-4 bg-[#1a1b1e]/10">
