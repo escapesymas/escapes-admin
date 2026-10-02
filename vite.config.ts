@@ -17,6 +17,9 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
+    watch: {
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/.*'],
+    },
     proxy: {
       '/api': {
         target: 'https://api.escapesymas.com',
