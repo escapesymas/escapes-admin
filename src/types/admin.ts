@@ -173,6 +173,8 @@ export interface Coupon {
   max_uses: number;
   expires_at?: string;
   active: boolean;
+  /** Compra mínima en céntimos (0 = sin mínimo). */
+  min_amount?: number;
 }
 
 export interface CartItem {

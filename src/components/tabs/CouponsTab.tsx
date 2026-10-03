@@ -20,6 +20,7 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
   const [type, setType] = useState('percent');
   const [value, setValue] = useState('');
   const [maxUses, setMaxUses] = useState('999999');
+  const [minAmount, setMinAmount] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [active, setActive] = useState(1);
 
@@ -57,6 +58,26 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
     }
   };
 
+  const handleEditMin = async (c: Coupon) => {
+    const current = c.min_amount ? (c.min_amount / 100).toFixed(2) : '0';
+    const input = window.prompt(`Compra mínima para ${c.code} en euros (0 = sin mínimo):`, current);
+    if (input === null) return;
+    const value = parseFloat(input.replace(',', '.'));
+    if (!Number.isFinite(value) || value < 0) return showToast('Importe no válido', 'error');
+    try {
+      const res = await fetch(`/api/admin?action=update-coupon`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, minAmount: value }),
+      });
+      if (!res.ok) throw new Error();
+      showToast(value > 0 ? `${c.code}: compra mínima ${value.toFixed(2)} €` : `${c.code}: sin compra mínima`);
+      fetchCoupons();
+    } catch {
+      showToast('No se pudo guardar', 'error');
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code || (type !== 'free_shipping' && !value)) return showToast('Faltan datos', 'error');
@@ -72,7 +93,8 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
           value: valNum,
           active,
           expiresAt: expiresAt || null,
-          maxUses: parseInt(maxUses)
+          maxUses: parseInt(maxUses),
+          minAmount: minAmount ? parseFloat(minAmount) : 0
         })
       });
       if (res.ok) {
@@ -80,6 +102,7 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
         setCode('');
         setValue('');
         setMaxUses('999999');
+        setMinAmount('');
         setExpiresAt('');
         fetchCoupons();
       }
@@ -181,6 +204,19 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-tech-muted uppercase tracking-widest block mb-2">Compra mínima (€, IVA incl.)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                  placeholder="0 = sin mínimo"
+                  className="w-full bg-[#1a1b1e] border border-tech-border rounded-xl py-3 px-4 text-sm font-bold placeholder-zinc-700 text-tech-text focus:outline-none focus:border-tech-yellow"
+                />
+              </div>
             </div>
 
             <button
@@ -201,6 +237,7 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
                 <th className="pb-3">Código</th>
                 <th className="pb-3">Tipo Descuento</th>
                 <th className="pb-3">Valor Real</th>
+                <th className="pb-3">Compra mínima</th>
                 <th className="pb-3">Canjes Totales</th>
                 <th className="pb-3">Fecha Vencimiento</th>
                 <th className="pb-3">Estado</th>
@@ -216,6 +253,16 @@ const CouponsTab: React.FC<CouponsTabProps> = ({ adminWpId, adminEmail, adminTok
                   </td>
                   <td className="py-4 font-black text-tech-text italic">
                     {c.type === 'percent' ? `${c.value}%` : c.type === 'fixed' ? formatPrice(c.value) : 'Coste Cero'}
+                  </td>
+                  <td className="py-4 text-xs font-bold">
+                    <button
+                      onClick={() => handleEditMin(c)}
+                      title="Cambiar la compra mínima"
+                      className="inline-flex items-center gap-1.5 text-zinc-300 hover:text-tech-yellow"
+                    >
+                      {c.min_amount ? formatPrice(c.min_amount) : 'Sin mínimo'}
+                      <Icons.Pencil size={11} className="opacity-60" />
+                    </button>
                   </td>
                   <td className="py-4 text-xs text-tech-muted font-bold">
                     <span className="text-zinc-300 font-mono font-black">{c.times_used}</span> /{' '}

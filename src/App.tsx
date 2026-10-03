@@ -125,7 +125,7 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-black tracking-widest text-tech-muted mb-2">Contraseña VPS</label>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-tech-muted mb-2">Contraseña</label>
               <div className="relative">
                 <input
                   type="password"
