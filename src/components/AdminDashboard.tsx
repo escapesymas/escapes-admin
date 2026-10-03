@@ -1183,7 +1183,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-red-500">Reembolsos (Stripe)</h4>
                   {(selectedOrder.refunded_amount ?? 0) > 0 && (
                     <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-red-955/40 text-red-400 border border-red-800/40">
-                      Reembolsado: {formatEuros(selectedOrder.refunded_amount || 0)}
+                      Reembolsado: {formatEuros((selectedOrder.refunded_amount || 0) / 100)}
                     </span>
                   )}
                 </div>
@@ -1194,10 +1194,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
                       type="number"
                       step="0.01"
                       min="0.01"
-                      max={(selectedOrder.total / 100) - (selectedOrder.refunded_amount || 0)}
+                      max={(selectedOrder.total - (selectedOrder.refunded_amount || 0)) / 100}
                       value={refundAmount}
                       onChange={(e) => setRefundAmount(e.target.value)}
-                      placeholder={`Max: ${((selectedOrder.total / 100) - (selectedOrder.refunded_amount || 0)).toFixed(2)}`}
+                      placeholder={`Max: ${((selectedOrder.total - (selectedOrder.refunded_amount || 0)) / 100).toFixed(2)}`}
                       className="w-full bg-tech-card border border-tech-border rounded-xl px-4 py-2 text-xs text-tech-text focus:border-red-500 outline-none"
                     />
                   </div>
@@ -1315,7 +1315,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             const data = await res.json();
             if (res.ok) {
               showToast('Reembolso procesado correctamente.');
-              setSelectedOrder({ ...selectedOrder, refunded_amount: (selectedOrder.refunded_amount || 0) + parseFloat(refundAmount) });
+              setSelectedOrder({ ...selectedOrder, refunded_amount: (selectedOrder.refunded_amount || 0) + Math.round(parseFloat(refundAmount) * 100) });
               setRefundAmount('');
               fetchData();
             } else {
