@@ -15,6 +15,7 @@ import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
 import RefundRequestsSection from './RefundRequestsSection';
+import { getUnreadCount, refreshSubscription } from '../utils/pushNotificationManager';
 import ProductFormModal from './modals/ProductFormModal';
 import ProductDetailModal from './modals/ProductDetailModal';
 import ConfirmModal from './modals/ConfirmModal';
@@ -31,6 +32,9 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout }) => {
   const [activeTab, setActiveTab] = useState('stats');
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  // Pedido a abrir cuando lleguen los pedidos (enlace de un aviso: /?tab=orders&order=123).
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -62,6 +66,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
   // Modals / Form States
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  useEffect(() => {
+    if (pendingOrderId === null || !orders.length) return;
+    const found = orders.find((o) => o.id === pendingOrderId);
+    if (found) setSelectedOrder(found);
+    setPendingOrderId(null);
+  }, [pendingOrderId, orders]);
   const [showProductForm, setShowProductForm] = useState<'create' | 'edit' | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showProductDetail, setShowProductDetail] = useState(false);
@@ -100,6 +110,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const adminWpId = session?.user_id || session?.user?.id || session?.user?.publicMetadata?.wp_id || session?.wp_id || '';
   const adminEmail = session?.user_email || session?.user?.emailAddresses?.[0]?.emailAddress || '';
   const adminToken = session?.token || session?.jwt || '';
+
+  /** Abre una pestaña (y un pedido) a partir del enlace de un aviso. */
+  const openAdminLink = (url: string) => {
+    try {
+      const u = new URL(url, window.location.origin);
+      const tab = u.searchParams.get('tab');
+      const order = parseInt(u.searchParams.get('order') || '');
+      if (tab) setActiveTab(tab);
+      if (Number.isFinite(order)) setPendingOrderId(order);
+    } catch { /* enlace no válido: se ignora */ }
+  };
+
+  // Enlace de entrada (al abrir el panel desde un aviso) y avisos pulsados con el panel abierto.
+  useEffect(() => {
+    if (window.location.search.includes('tab=')) {
+      openAdminLink(window.location.href);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open-url' && typeof e.data.url === 'string') openAdminLink(e.data.url);
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Contador de avisos sin leer (cada minuto y al volver a la app) y registro del dispositivo.
+  useEffect(() => {
+    if (!adminToken) return;
+    refreshSubscription(adminToken);
+    const tick = () => getUnreadCount(adminToken).then(setUnreadNotifications);
+    tick();
+    const id = setInterval(tick, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, [adminToken]);
 
   const authHeaders = () => ({ 'Authorization': `Bearer ${adminToken}` });
 
@@ -476,6 +523,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       setActiveTab={setActiveTab}
       pendingOrdersCount={orders.filter(o => o.status === 'pending').length}
       activeCartsCount={carts.length}
+      unreadNotificationsCount={unreadNotifications}
     >
       <div className="p-4 sm:p-6 md:p-10">
         {error && (
@@ -499,7 +547,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'seo' && 'SEO Auto-Linking'}
               {activeTab === 'sync' && 'Consola de Sincronización (Bihr)'}
               {activeTab === 'margins' && 'Precios y Márgenes'}
-              {activeTab === 'notifications' && 'Notificaciones Push (iPhone)'}
+              {activeTab === 'notifications' && 'Avisos del panel'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
               {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
             </h1>
@@ -513,7 +561,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'seo' && 'Gestiona el diccionario de palabras clave del enlazado interno dofollow.'}
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
-              {activeTab === 'notifications' && 'Configura y activa las alertas push instantáneas en tu dispositivo.'}
+              {activeTab === 'notifications' && 'Historial de avisos y qué recibir en el móvil.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
             </p>
@@ -637,7 +685,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'notifications' && (
           <div className="py-4">
-            <PushNotificationToggle token={adminToken} />
+            <PushNotificationToggle token={adminToken} onOpenLink={openAdminLink} onUnreadChange={setUnreadNotifications} />
           </div>
         )}
 
