@@ -27,6 +27,23 @@ export interface OrderNote {
 export type OrderStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
 export type DropshippingStatus = 'not_sent' | 'pending_bihr' | 'shipped' | 'cancelled';
 
+export interface RefundRequest {
+  id: number;
+  scope: 'full' | 'partial';
+  items: Array<{ itemId: number; productId?: number | null; name: string; quantity: number; priceCents: number }>;
+  /** Importe estimado en euros. */
+  amount: number;
+  reasonCode: string;
+  reasonLabel: string;
+  reason: string;
+  status: 'pending' | 'refunded' | 'rejected';
+  adminNote: string | null;
+  /** Importe reembolsado en euros. */
+  refunded: number;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface Order {
   id: number;
   status: OrderStatus;
@@ -45,6 +62,7 @@ export interface Order {
   bihrTicketId?: string;
   shippingData: ShippingData;
   items: OrderItem[];
+  refundRequests?: RefundRequest[];
 }
 
 export interface ProductImage {

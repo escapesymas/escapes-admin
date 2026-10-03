@@ -14,6 +14,7 @@ import ReviewsTab from './tabs/ReviewsTab';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
+import RefundRequestsSection from './RefundRequestsSection';
 import ProductFormModal from './modals/ProductFormModal';
 import ProductDetailModal from './modals/ProductDetailModal';
 import ConfirmModal from './modals/ConfirmModal';
@@ -1175,6 +1176,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
                 </div>
               </div>
             </div>
+
+            {/* SOLICITUDES DE REEMBOLSO DEL CLIENTE */}
+            <RefundRequestsSection
+              requests={selectedOrder.refundRequests || []}
+              authHeaders={authHeaders}
+              showToast={showToast}
+              onResolved={async () => {
+                const id = selectedOrder.id;
+                const r = await fetch(`/api/admin?action=orders-list`, { headers: authHeaders() });
+                if (r.ok) {
+                  const d = await r.json();
+                  const list: Order[] = Array.isArray(d) ? d : (d.orders || []);
+                  setOrders(list);
+                  const fresh = list.find((o) => o.id === id);
+                  if (fresh) setSelectedOrder(fresh);
+                }
+              }}
+            />
 
             {/* REEMBOLSOS (STRIPE) */}
             {(selectedOrder.stripe_charge_id || selectedOrder.paymentId) && (

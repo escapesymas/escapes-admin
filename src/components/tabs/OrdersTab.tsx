@@ -263,6 +263,11 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
                   <td className="py-4 font-black italic text-zinc-300 text-sm">{formatPrice(order.total)}</td>
                   <td className="py-4">
                     <OrderStatusBadge status={order.status} />
+                    {order.refundRequests?.some((r) => r.status === 'pending') && (
+                      <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-black uppercase border border-amber-600/60 text-amber-400" title="El cliente ha pedido un reembolso">
+                        Reembolso solicitado
+                      </span>
+                    )}
                   </td>
                   <td className="py-4">
                     <DropshippingStatusBadge 
