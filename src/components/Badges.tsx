@@ -6,12 +6,20 @@ export const OrderStatusBadge = ({ status }: { status: string }) => {
     processing: 'bg-blue-950/20 text-blue-400 border-blue-900/30',
     completed: 'bg-green-950/20 text-green-500 border-green-900/30',
     cancelled: 'bg-red-950/20 text-red-500 border-red-900/30',
+    refunded: 'bg-sky-950/20 text-sky-400 border-sky-900/30',
+    partially_refunded: 'bg-sky-950/20 text-sky-400 border-sky-900/30',
+    pending_payment: 'bg-yellow-950/20 text-yellow-500 border-yellow-900/30',
+    payment_failed: 'bg-red-950/20 text-red-500 border-red-900/30',
   };
   const labels: Record<string, string> = {
     pending: 'Pendiente',
     processing: 'Procesando',
     completed: 'Completado',
     cancelled: 'Cancelado',
+    refunded: 'Reembolsado',
+    partially_refunded: 'Reembolso parcial',
+    pending_payment: 'Pendiente de pago',
+    payment_failed: 'Pago fallido',
   };
   return (
     <span className={`px-2.5 py-0.5 rounded text-[9px] font-black uppercase italic border ${map[status] || 'bg-[#1a1b1e] text-tech-muted border-tech-border'}`}>
