@@ -11,6 +11,7 @@ interface AdminLayoutProps {
   pendingOrdersCount: number;
   activeCartsCount: number;
   pendingReviewsCount?: number;
+  unreadNotificationsCount?: number;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -21,7 +22,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onLogout,
   pendingOrdersCount,
   activeCartsCount,
-  pendingReviewsCount = 0
+  pendingReviewsCount = 0,
+  unreadNotificationsCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -54,7 +56,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'seo', label: 'SEO Manager', icon: Icons.Link2 },
     { id: 'sync', label: 'Sincronización', icon: Icons.RefreshCw },
     { id: 'margins', label: 'Precios y Márgenes', icon: Icons.TrendingUp },
-    { id: 'notifications', label: 'Notificaciones', icon: Icons.Bell },
+    { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount },
     { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
   ];
 
