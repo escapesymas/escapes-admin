@@ -7,7 +7,7 @@ import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBu
 import { ChatSales } from '../chat/ChatSales';
 import { MyCommissions } from '../chat/MyCommissions';
 import { AgentsManager } from '../chat/AgentsManager';
-import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications } from '../../utils/pushNotificationManager';
+import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications, isIOS, isStandalonePWA } from '../../utils/pushNotificationManager';
 
 /**
  * Chat con clientes: conversaciones que el asistente IA ha pasado a un asesor
@@ -145,6 +145,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents'>('chats');
   const [myOnline, setMyOnline] = useState(false);
   const [pushReady, setPushReady] = useState<boolean | null>(null);
+  const [showIosHelp, setShowIosHelp] = useState(false);
+  // En el iPhone solo hay avisos con la web añadida a la pantalla de inicio.
+  const iosNeedsInstall = typeof window !== 'undefined' && isIOS() && !isStandalonePWA() && !isPushNotificationSupported();
   const [scope, setScope] = useState<'open' | 'closed'>('open');
   const [list, setList] = useState<ConversationItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -453,6 +456,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
               <Icons.BellRing size={14} /> Activar avisos aquí
             </button>
           )}
+          {pushReady === true && (
+            <span className="flex items-center gap-1 text-[10px] font-mono uppercase text-emerald-400"><Icons.BellRing size={14} /> Avisos activos</span>
+          )}
+          {iosNeedsInstall && (
+            <button onClick={() => setShowIosHelp((v) => !v)} className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-yellow border border-tech-yellow/40 rounded-lg px-2.5 py-2">
+              <Icons.BellRing size={14} /> Avisos en el iPhone
+            </button>
+          )}
           {!isAdvisor && settings && (
             <div className="flex rounded-lg border border-tech-border overflow-hidden text-[10px] font-mono uppercase" title="Horario de atención">
               {([['auto', 'Según horario'], ['on', 'Siempre'], ['off', 'Cerrado']] as const).map(([m, label]) => (
@@ -467,6 +478,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
             <Icons.Settings2 size={14} /> Ajustes
           </button>
         </div>
+
+        {showIosHelp && iosNeedsInstall && (
+          <div className="mt-3 text-xs text-tech-text bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-1">
+            <p className="font-bold">Para recibir los avisos del chat en el iPhone:</p>
+            <ol className="list-decimal pl-4 space-y-0.5 text-tech-muted">
+              <li>Pulsa el botón <b className="text-tech-text">Compartir</b> del navegador (el cuadrado con la flecha).</li>
+              <li>Elige <b className="text-tech-text">Añadir a pantalla de inicio</b>.</li>
+              <li>Abre el panel desde ese icono e inicia sesión.</li>
+              <li>Pulsa <b className="text-tech-text">Activar avisos aquí</b> y permite las notificaciones.</li>
+            </ol>
+            <p className="text-tech-muted">Necesita iOS 16.4 o posterior. En Android y en el ordenador se activan directamente desde el navegador.</p>
+          </div>
+        )}
 
         {showSettings && isAdvisor && (
           <div className="mt-4 pt-4 border-t border-tech-border flex flex-wrap items-end gap-2">

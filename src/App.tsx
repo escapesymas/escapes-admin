@@ -9,7 +9,14 @@ const ADVISORS_HOST = typeof window !== 'undefined' && window.location.hostname.
 const INVITATION = typeof window !== 'undefined'
   ? (window.location.pathname.match(/^\/invitacion\/([a-f0-9]{64})\/?$/)?.[1] || new URLSearchParams(window.location.search).get('invitacion'))
   : null;
-if (ADVISORS_HOST) document.title = 'Escapes y Más · Asesores';
+if (ADVISORS_HOST) {
+  document.title = 'Escapes y Más · Asesores';
+  // Al añadirla a la pantalla de inicio, la app se llama «Asesores E&M».
+  document.querySelector('link[rel="manifest"]')?.setAttribute('href', '/manifest-asesores.json');
+  let appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (!appTitle) { appTitle = document.createElement('meta'); appTitle.setAttribute('name', 'apple-mobile-web-app-title'); document.head.appendChild(appTitle); }
+  appTitle.setAttribute('content', 'Asesores E&M');
+}
 import { Shield, Key, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function App() {
