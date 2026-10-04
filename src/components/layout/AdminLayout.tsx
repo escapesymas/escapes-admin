@@ -62,6 +62,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'seo', label: 'SEO Manager', icon: Icons.Link2 },
     { id: 'sync', label: 'Sincronización', icon: Icons.RefreshCw },
     { id: 'margins', label: 'Precios y Márgenes', icon: Icons.TrendingUp },
+    { id: 'social-content', label: 'Contenido TikTok', icon: Icons.Clapperboard },
     { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount },
     { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
   ];

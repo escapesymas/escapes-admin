@@ -11,6 +11,7 @@ import SeoTab from './tabs/SeoTab';
 import MarginsTab from './tabs/MarginsTab';
 import CartsTab from './tabs/CartsTab';
 import ReviewsTab from './tabs/ReviewsTab';
+import SocialContentTab from './tabs/SocialContentTab';
 import ChatTab from './tabs/ChatTab';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
@@ -40,6 +41,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [pendingChatId, setPendingChatId] = useState<number | null>(null);
   // Pedido a abrir cuando lleguen los pedidos (enlace de un aviso: /?tab=orders&order=123).
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+  const [pendingSlotId, setPendingSlotId] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -124,9 +126,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       const tab = u.searchParams.get('tab');
       const order = parseInt(u.searchParams.get('order') || '');
       const chat = parseInt(u.searchParams.get('chat') || '');
+      const slot = parseInt(u.searchParams.get('slot') || '');
       if (tab && (!isAdvisor || tab === 'chat')) setActiveTab(tab);
       if (Number.isFinite(order)) setPendingOrderId(order);
       if (Number.isFinite(chat)) setPendingChatId(chat);
+      if (Number.isFinite(slot)) setPendingSlotId(slot);
     } catch { /* enlace no válido: se ignora */ }
   };
 
@@ -575,6 +579,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'chat' && 'Chat con clientes'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
               {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
+              {activeTab === 'social-content' && 'Contenido para TikTok'}
             </h1>
             <p className="text-tech-muted text-xs mt-1 font-medium">
               {activeTab === 'stats' && 'Vista general del rendimiento del e-commerce.'}
@@ -590,6 +595,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'chat' && (isAdvisor ? 'Clientes que el asistente IA te ha pasado. Responde aquí.' : 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.')}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
+              {activeTab === 'social-content' && 'Calendario de publicaciones con copy e imágenes generadas por IA, listas para subir.'}
             </p>
           </div>
           {/* Conectado, avisos y ajustes del chat (los coloca ChatTab). */}
@@ -727,6 +733,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'reviews' && (
           <ReviewsTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} onReviewsUpdated={() => fetchData(true)} />
+        )}
+
+        {activeTab === 'social-content' && (
+          <SocialContentTab adminToken={adminToken} initialSlotId={pendingSlotId} />
         )}
         </ErrorBoundary>
       </div>
