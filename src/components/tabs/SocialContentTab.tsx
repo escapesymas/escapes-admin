@@ -19,7 +19,7 @@ interface ContentSlot {
   media_urls: string[];
   image_prompt?: string | null;
   video_prompt?: string | null;
-  final_media?: { url: string; type: 'image' | 'video'; name: string }[];
+  final_media?: { url: string; type: 'image' | 'video'; name: string; original?: string }[];
   status: 'draft' | 'generating' | 'ready' | 'published' | 'skipped';
   error: string | null;
 }
@@ -356,7 +356,12 @@ const SlotEditor: React.FC<{
         <div className="space-y-4 border-t border-tech-border/30 pt-4">
           {!!slot.media_urls?.length && (
             <div>
-              <label className={labelClass}>Imágenes</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className={labelClass}>Imágenes promocionales</label>
+                <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
+                  <Icons.BadgeCheck size={11} /> Rehacer con logos
+                </button>
+              </div>
               <div className="flex gap-2 flex-wrap">
                 {slot.media_urls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group">
@@ -424,6 +429,87 @@ const SlotEditor: React.FC<{
   );
 };
 
+/** Logos oficiales de las marcas para las imágenes promocionales. */
+const BrandLogos: React.FC<{ adminToken: string; onClose: () => void }> = ({ adminToken, onClose }) => {
+  const { showToast } = useToast();
+  const [brands, setBrands] = useState<{ brand: string; url: string | null }[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [custom, setCustom] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const target = useRef<string>('');
+
+  const load = () => fetch('/api/social-content/brand-logos', { headers: { Authorization: `Bearer ${adminToken}` } })
+    .then((r) => (r.ok ? r.json() : { brands: [] })).then((d) => setBrands(d.brands || [])).catch(() => setBrands([]));
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [adminToken]);
+
+  const pick = (brand: string) => { target.current = brand; fileRef.current?.click(); };
+
+  const upload = async (file: File) => {
+    const brand = target.current;
+    setBusy(brand);
+    try {
+      const form = new FormData();
+      form.append('brand', brand);
+      form.append('file', file);
+      const res = await fetch('/api/social-content/brand-logos', { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` }, body: form });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(d.error || 'No se pudo subir el logo', 'error'); return; }
+      showToast(`Logo de ${d.brand} guardado. Pulsa «Rehacer con logos» en sus publicaciones.`, 'success');
+      setCustom('');
+      load();
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setBusy(null);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const remove = async (brand: string) => {
+    if (!window.confirm(`¿Quitar el logo de ${brand}?`)) return;
+    await fetch(`/api/social-content/brand-logos/${encodeURIComponent(brand)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
+    load();
+  };
+
+  return (
+    <div className="bg-tech-card border border-tech-border rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 text-xs font-black uppercase tracking-wider text-tech-text flex items-center gap-1.5"><Icons.BadgeCheck size={14} className="text-tech-yellow" /> Logos de marcas</p>
+        <button onClick={onClose} className="text-tech-muted hover:text-tech-text" aria-label="Cerrar"><Icons.X size={16} /></button>
+      </div>
+      <p className="text-[11px] text-tech-muted">
+        Se ponen en las imágenes promocionales junto al logo de escapesymas.com. Mejor en PNG con fondo transparente o SVG,
+        descargado de la web oficial o del material de prensa de la marca.
+      </p>
+      <input ref={fileRef} type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      {!brands && <p className="text-xs text-tech-muted">Cargando…</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {brands?.map((b) => (
+          <div key={b.brand} className="flex items-center gap-2 bg-tech-carbon border border-tech-border rounded-lg p-2">
+            <div className="w-24 h-12 rounded bg-white grid place-items-center shrink-0">
+              {b.url ? <img src={b.url} alt={b.brand} className="max-w-[88px] max-h-10 object-contain" /> : <Icons.ImageOff size={16} className="text-zinc-400" />}
+            </div>
+            <span className="flex-1 min-w-0">
+              <span className="block text-xs font-bold text-tech-text truncate">{b.brand}</span>
+              <span className={`block text-[10px] ${b.url ? 'text-emerald-400' : 'text-amber-400'}`}>{b.url ? 'Logo subido' : 'Falta el logo'}</span>
+            </span>
+            <button onClick={() => pick(b.brand)} disabled={busy === b.brand} className="text-tech-yellow hover:text-orange-400 disabled:opacity-50" aria-label="Subir logo">
+              {busy === b.brand ? <Icons.Loader2 size={15} className="animate-spin" /> : <Icons.Upload size={15} />}
+            </button>
+            {b.url && <button onClick={() => remove(b.brand)} className="text-tech-muted hover:text-red-400" aria-label="Quitar logo"><Icons.Trash2 size={14} /></button>}
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Otra marca (tal como sale en el producto)" maxLength={60} className={inputClass} />
+        <button onClick={() => custom.trim() && pick(custom.trim())} disabled={!custom.trim()}
+          className="bg-tech-border text-tech-text px-3 rounded-lg text-xs font-bold disabled:opacity-40 shrink-0">Subir logo</button>
+      </div>
+    </div>
+  );
+};
+
 const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initialSlotId }) => {
   const { showToast } = useToast();
   const [slots, setSlots] = useState<ContentSlot[]>([]);
@@ -431,6 +517,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   const [expandedId, setExpandedId] = useState<number | null>(initialSlotId || null);
   const [autoScheduling, setAutoScheduling] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showLogos, setShowLogos] = useState(false);
   const [newWhen, setNewWhen] = useState('');
   const [newFormat, setNewFormat] = useState<ContentSlot['format']>('video');
   const slotsRef = useRef<ContentSlot[]>([]);
@@ -528,6 +615,10 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2 flex-wrap">
+        <button onClick={() => setShowLogos((v) => !v)}
+          className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+          <Icons.BadgeCheck size={14} /> Logos de marcas
+        </button>
         <button onClick={() => setShowNew((v) => !v)}
           className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <Icons.Plus size={14} /> Nueva publicación
@@ -541,6 +632,8 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
           Rellenar próximos 7 días
         </button>
       </div>
+
+      {showLogos && <BrandLogos adminToken={adminToken} onClose={() => setShowLogos(false)} />}
 
       {showNew && (
         <div className="bg-tech-card border border-tech-border rounded-xl p-4 flex flex-col md:flex-row gap-3 md:items-end">
