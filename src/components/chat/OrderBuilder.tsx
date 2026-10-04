@@ -107,7 +107,7 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
-      <div className="w-full max-w-lg h-full bg-tech-card border-l border-tech-border flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="pt-[max(5vh,env(safe-area-inset-top))] md:pt-0 w-full max-w-lg h-full bg-tech-card border-l border-tech-border flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-tech-border flex items-center gap-2">
           <Icons.ShoppingCart size={18} className="text-tech-yellow" />
           <div className="flex-1">
