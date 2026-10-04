@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ToastProvider } from './components/ToastContext';
+import { AcceptInvitation } from './components/AcceptInvitation';
+
+// El mismo panel sirve a los asesores en asesores.escapesymas.com (solo el chat).
+const ADVISORS_HOST = typeof window !== 'undefined' && window.location.hostname.startsWith('asesores.');
+const INVITATION = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invitacion') : null;
+if (ADVISORS_HOST) document.title = 'Escapes y Más · Asesores';
 import { Shield, Key, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -43,11 +49,16 @@ export default function App() {
         throw new Error(data.error || 'Credenciales inválidas');
       }
 
+      const role = data.user?.role || '';
+      if (role !== 'admin' && role !== 'asesor') {
+        throw new Error(ADVISORS_HOST ? 'Esta cuenta no es de asesor. Pide una invitación al administrador.' : 'Esta cuenta no tiene acceso al panel.');
+      }
       const safeSession = {
         token: data.token || data.jwt || '',
         user_id: data.user_id || data.user?.id || data.wpId || '',
         user_email: data.user_email || data.user?.email || '',
         user: data.user || null,
+        role,
       };
 
       localStorage.setItem('escapesymas_admin_session', JSON.stringify(safeSession));
@@ -73,6 +84,15 @@ export default function App() {
     );
   }
 
+  if (INVITATION && !session) {
+    return (
+      <AcceptInvitation
+        token={INVITATION}
+        onDone={(sess) => { localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess)); setSession(sess); }}
+      />
+    );
+  }
+
   if (session) {
     return (
       <ToastProvider>
@@ -94,9 +114,9 @@ export default function App() {
               <Shield className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-black italic uppercase tracking-tighter text-tech-text">
-              Escapes <span className="text-tech-yellow">Admin</span>
+              Escapes <span className="text-tech-yellow">{ADVISORS_HOST ? 'Asesores' : 'Admin'}</span>
             </h1>
-            <p className="text-tech-muted text-xs mt-1 uppercase tracking-widest font-bold">Consola de Control del VPS</p>
+            <p className="text-tech-muted text-xs mt-1 uppercase tracking-widest font-bold">{ADVISORS_HOST ? 'Panel de asesores' : 'Consola de Control del VPS'}</p>
           </div>
 
           {error && (
@@ -111,13 +131,13 @@ export default function App() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-[10px] uppercase font-black tracking-widest text-tech-muted mb-2">Email Administrador</label>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-tech-muted mb-2">{ADVISORS_HOST ? 'Email' : 'Email Administrador'}</label>
               <div className="relative">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@escapesymas.com"
+                  placeholder={ADVISORS_HOST ? 'tu@email.com' : 'admin@escapesymas.com'}
                   required
                   className="w-full bg-[#1a1b1e]/60 border border-tech-border focus:border-tech-yellow/50 rounded-xl px-4 py-3 text-sm text-tech-text placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-tech-yellow/30 transition-all font-medium"
                 />

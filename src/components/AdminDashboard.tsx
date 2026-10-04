@@ -32,7 +32,9 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout }) => {
-  const [activeTab, setActiveTab] = useState('stats');
+  // Los asesores solo tienen el chat (sesiones antiguas sin rol: administrador).
+  const isAdvisor = (session?.role || session?.user?.role) === 'asesor';
+  const [activeTab, setActiveTab] = useState(isAdvisor ? 'chat' : 'stats');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [chatPending, setChatPending] = useState(0);
   const [pendingChatId, setPendingChatId] = useState<number | null>(null);
@@ -121,7 +123,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       const tab = u.searchParams.get('tab');
       const order = parseInt(u.searchParams.get('order') || '');
       const chat = parseInt(u.searchParams.get('chat') || '');
-      if (tab) setActiveTab(tab);
+      if (tab && (!isAdvisor || tab === 'chat')) setActiveTab(tab);
       if (Number.isFinite(order)) setPendingOrderId(order);
       if (Number.isFinite(chat)) setPendingChatId(chat);
     } catch { /* enlace no válido: se ignora */ }
@@ -145,6 +147,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   useEffect(() => {
     if (!adminToken) return;
     refreshSubscription(adminToken);
+    if (isAdvisor) return;
     const tick = () => getUnreadCount(adminToken).then(setUnreadNotifications);
     tick();
     const id = setInterval(tick, 60_000);
@@ -268,6 +271,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   };
 
   useEffect(() => {
+    if (isAdvisor) return;
     fetchData();
 
     const interval = setInterval(() => {
@@ -542,6 +546,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       activeCartsCount={carts.length}
       unreadNotificationsCount={unreadNotifications}
       chatPendingCount={chatPending}
+      isAdvisor={isAdvisor}
     >
       <div className="p-4 sm:p-6 md:p-10">
         {error && (
@@ -704,7 +709,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         )}
 
         {activeTab === 'chat' && (
-          <ChatTab adminToken={adminToken} initialConversationId={pendingChatId} onSummaryChange={setChatPending} />
+          <ChatTab adminToken={adminToken} initialConversationId={pendingChatId} onSummaryChange={setChatPending} isAdvisor={isAdvisor} />
         )}
 
         {activeTab === 'notifications' && (

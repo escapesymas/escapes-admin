@@ -244,10 +244,13 @@ export interface AdminSession {
   jwt?: string;
   user_id?: string;
   user_email?: string;
+  /** admin o asesor (los asesores solo ven el chat). */
+  role?: string;
   wp_id?: string;
   email?: string;
   user?: {
     id?: string;
+    role?: string;
     emailAddresses?: { emailAddress: string }[];
     publicMetadata?: { wp_id?: string };
   };

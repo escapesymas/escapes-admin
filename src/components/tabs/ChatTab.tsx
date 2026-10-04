@@ -6,6 +6,8 @@ import { ProductPicker } from '../chat/ProductPicker';
 import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBuilder';
 import { ChatSales } from '../chat/ChatSales';
 import { MyCommissions } from '../chat/MyCommissions';
+import { AgentsManager } from '../chat/AgentsManager';
+import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications } from '../../utils/pushNotificationManager';
 
 /**
  * Chat con clientes: conversaciones que el asistente IA ha pasado a un asesor
@@ -19,6 +21,8 @@ interface ChatTabProps {
   /** Conversación a abrir al entrar (desde un aviso del móvil). */
   initialConversationId?: number | null;
   onSummaryChange?: (pending: number) => void;
+  /** Asesor (panel de asesores): sin ventas, sin equipo ni horario global. */
+  isAdvisor?: boolean;
 }
 
 interface ConversationItem {
@@ -68,6 +72,8 @@ interface SupportSettings {
 
 interface SupportStatus {
   available: boolean;
+  inHours?: boolean;
+  onlineAgents?: number;
   hoursText: string;
   nextOpen: string | null;
 }
@@ -134,9 +140,11 @@ const MessageBody: React.FC<{ m: Message }> = ({ m }) => {
   return <>{m.content}</>;
 };
 
-const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange, isAdvisor = false }) => {
   const { showToast } = useToast();
-  const [view, setView] = useState<'chats' | 'sales' | 'commissions'>('chats');
+  const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents'>('chats');
+  const [myOnline, setMyOnline] = useState(false);
+  const [pushReady, setPushReady] = useState<boolean | null>(null);
   const [scope, setScope] = useState<'open' | 'closed'>('open');
   const [list, setList] = useState<ConversationItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -249,7 +257,39 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       setSettings(data.settings);
       setStatus(data.status);
       setMyAgentName((prev) => prev || data.myAgentName || '');
+      setMyOnline(!!data.myOnline);
     } catch { /* nada */ }
+  };
+
+  // ¿Este dispositivo recibe los avisos del chat?
+  useEffect(() => {
+    if (!isPushNotificationSupported()) { setPushReady(null); return; }
+    getCurrentSubscription().then((sub) => setPushReady(!!sub)).catch(() => setPushReady(false));
+  }, []);
+
+  const enablePush = async () => {
+    try {
+      await subscribeToPushNotifications(adminToken);
+      setPushReady(true);
+      showToast('Avisos activados en este dispositivo');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudieron activar los avisos', 'error');
+    }
+  };
+
+  /** Conectarse/desconectarse para atender o cambiar el nombre (cualquier asesor). */
+  const saveAgentStatus = async (patch: { online?: boolean; name?: string }) => {
+    try {
+      const res = await fetch('/api/admin/agent-status', { method: 'POST', headers, body: JSON.stringify(patch) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      setMyOnline(!!data.myOnline);
+      if (data.myAgentName) setMyAgentName(data.myAgentName);
+      if (data.status) setStatus(data.status);
+      if (patch.name !== undefined) showToast('Nombre guardado');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo guardar', 'error');
+    }
   };
   useEffect(() => {
     loadSettings();
@@ -389,18 +429,33 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       {/* Estado, horario y ajustes */}
       <div className="bg-tech-card border border-tech-border rounded-xl p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className={`w-2.5 h-2.5 rounded-full ${status?.available ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <button
+            onClick={() => saveAgentStatus({ online: !myOnline })}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono uppercase font-bold ${myOnline ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}
+            title={myOnline ? 'Pulsa para dejar de recibir clientes' : 'Pulsa para empezar a atender'}
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${myOnline ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+            {myOnline ? 'Conectado' : 'Desconectado'}
+          </button>
           <div className="flex-1 min-w-[200px]">
             <p className="text-sm font-bold text-tech-text">
-              {status?.available ? 'Estás disponible: la IA ofrecerá hablar contigo' : 'No disponible: la IA da el horario y el email'}
+              {status?.available
+                ? 'La IA ofrece hablar con un asesor'
+                : status?.inHours ? 'Nadie conectado: la IA da el email y el horario' : 'Fuera de horario: la IA da el horario y el email'}
             </p>
             <p className="text-[11px] text-tech-muted">
-              Horario: {status?.hoursText || '…'}{!status?.available && status?.nextOpen ? ` · Vuelves ${status.nextOpen}` : ''}
+              Horario: {status?.hoursText || '…'}{!status?.inHours && status?.nextOpen ? ` · Abre ${status.nextOpen}` : ''}
+              {' · '}Asesores conectados: {status?.onlineAgents ?? 0}
             </p>
           </div>
-          {settings && (
-            <div className="flex rounded-lg border border-tech-border overflow-hidden text-[10px] font-mono uppercase">
-              {([['auto', 'Según horario'], ['on', 'Disponible'], ['off', 'No disponible']] as const).map(([m, label]) => (
+          {pushReady === false && (
+            <button onClick={enablePush} className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-yellow border border-tech-yellow/40 rounded-lg px-2.5 py-2">
+              <Icons.BellRing size={14} /> Activar avisos aquí
+            </button>
+          )}
+          {!isAdvisor && settings && (
+            <div className="flex rounded-lg border border-tech-border overflow-hidden text-[10px] font-mono uppercase" title="Horario de atención">
+              {([['auto', 'Según horario'], ['on', 'Siempre'], ['off', 'Cerrado']] as const).map(([m, label]) => (
                 <button key={m} onClick={() => saveSettings({ ...settings, mode: m })} disabled={savingSettings}
                   className={`px-3 py-2 ${settings.mode === m ? 'bg-tech-yellow text-black font-bold' : 'text-tech-muted hover:text-tech-text'}`}>
                   {label}
@@ -413,7 +468,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           </button>
         </div>
 
-        {showSettings && settings && (
+        {showSettings && isAdvisor && (
+          <div className="mt-4 pt-4 border-t border-tech-border flex flex-wrap items-end gap-2">
+            <label className="block text-[11px] text-tech-muted flex-1 min-w-[200px]">
+              Tu nombre en el chat (lo ve el cliente en la bienvenida y en tus mensajes)
+              <input value={myAgentName} onChange={(e) => setMyAgentName(e.target.value)} maxLength={60}
+                className="mt-1 w-full bg-tech-carbon border border-tech-border rounded-lg px-3 py-2 text-sm text-tech-text" />
+            </label>
+            <button onClick={() => saveAgentStatus({ name: myAgentName })}
+              className="bg-tech-yellow text-black text-xs font-bold font-mono uppercase px-4 py-2 rounded-lg">Guardar</button>
+          </div>
+        )}
+
+        {showSettings && !isAdvisor && settings && (
           <div className="mt-4 pt-4 border-t border-tech-border space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
               <label className="block text-[11px] text-tech-muted">
@@ -468,7 +535,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
 
       {/* Conversaciones / ventas */}
       <div className="flex gap-2 text-[10px] font-mono uppercase">
-        {([['chats', 'Conversaciones', Icons.MessagesSquare], ['sales', 'Ventas del chat', Icons.BadgeEuro], ['commissions', 'Mis comisiones', Icons.Wallet]] as const).map(([v, label, Icon]) => (
+        {([
+          ['chats', 'Conversaciones', Icons.MessagesSquare],
+          ...(isAdvisor ? [] : [['sales', 'Ventas del chat', Icons.BadgeEuro], ['agents', 'Asesores', Icons.Users]] as const),
+          ['commissions', 'Mis comisiones', Icons.Wallet],
+        ] as const).map(([v, label, Icon]) => (
           <button key={v} onClick={() => setView(v)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border ${view === v ? 'border-tech-yellow text-tech-yellow' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}>
             <Icon size={14} /> {label}
@@ -476,7 +547,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
         ))}
       </div>
 
-      {view === 'sales' && (
+      {view === 'agents' && !isAdvisor && <AgentsManager adminToken={adminToken} showToast={showToast} />}
+
+      {view === 'sales' && !isAdvisor && (
         <ChatSales adminToken={adminToken} onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
       )}
 

@@ -13,6 +13,8 @@ interface AdminLayoutProps {
   pendingReviewsCount?: number;
   unreadNotificationsCount?: number;
   chatPendingCount?: number;
+  /** Asesor: solo el chat. */
+  isAdvisor?: boolean;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -25,7 +27,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   activeCartsCount,
   pendingReviewsCount = 0,
   unreadNotificationsCount = 0,
-  chatPendingCount = 0
+  chatPendingCount = 0,
+  isAdvisor = false
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -46,7 +49,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     setIsMobileMenuOpen(false);
   };
 
-  const navItems = [
+  const allNavItems = [
     { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
     { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
@@ -62,6 +65,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount },
     { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
   ];
+  const navItems = isAdvisor ? allNavItems.filter((i) => i.id === 'chat') : allNavItems;
 
   const renderNavButtons = () => {
     return navItems.map(item => {
@@ -101,8 +105,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Icons.Shield size={16} />
             </div>
             <div className="flex flex-col">
-              <span className="font-mono font-bold uppercase tracking-tighter text-xs">Escapes <span className="text-tech-yellow">Panel</span></span>
-              <span className="text-[7px] text-tech-muted font-mono uppercase tracking-widest">Master Admin</span>
+              <span className="font-mono font-bold uppercase tracking-tighter text-xs">Escapes <span className="text-tech-yellow">{isAdvisor ? 'Asesores' : 'Panel'}</span></span>
+              <span className="text-[7px] text-tech-muted font-mono uppercase tracking-widest">{isAdvisor ? 'Panel de asesor' : 'Master Admin'}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -141,8 +145,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 <Icons.Shield className="w-5 h-5" />
               </div>
               <div className="flex flex-col">
-                <span className="font-mono font-bold uppercase tracking-tighter text-sm">Escapes <span className="text-tech-yellow">Panel</span></span>
-                <span className="text-[9px] text-tech-muted font-mono uppercase tracking-widest">Master Admin</span>
+                <span className="font-mono font-bold uppercase tracking-tighter text-sm">Escapes <span className="text-tech-yellow">{isAdvisor ? 'Asesores' : 'Panel'}</span></span>
+                <span className="text-[9px] text-tech-muted font-mono uppercase tracking-widest">{isAdvisor ? 'Panel de asesor' : 'Master Admin'}</span>
               </div>
             </div>
             <button 
@@ -188,8 +192,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Icons.Shield className="w-5 h-5" />
             </div>
             <div className="flex flex-col">
-              <span className="font-mono font-bold uppercase tracking-tighter text-sm">Escapes <span className="text-tech-yellow">Panel</span></span>
-              <span className="text-[9px] text-tech-muted font-mono uppercase tracking-widest">Master Admin</span>
+              <span className="font-mono font-bold uppercase tracking-tighter text-sm">Escapes <span className="text-tech-yellow">{isAdvisor ? 'Asesores' : 'Panel'}</span></span>
+              <span className="text-[9px] text-tech-muted font-mono uppercase tracking-widest">{isAdvisor ? 'Panel de asesor' : 'Master Admin'}</span>
             </div>
           </div>
 
