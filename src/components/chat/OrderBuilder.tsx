@@ -20,7 +20,7 @@ export interface DraftLine {
 
 /** Importes y comisión calculados por el servidor para el borrador. */
 export interface OrderPreview {
-  lines: { id: number; quantity: number; discount: number; list: number; unit: number; max_discount_pct: number; commission_unit: number | null; commission: number | null }[];
+  lines: { id: number; quantity: number; discount: number; list: number; unit: number; max_discount_pct: number; in_promo?: boolean; commission_unit: number | null; commission: number | null }[];
   quote: { subtotal: number; discount: number; discountPercent: number; shipping: number; total: number } | null;
   commissionTotal: number;
 }
@@ -160,6 +160,7 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
                 const pv = preview?.lines.find((x) => x.id === l.product.id);
                 const max = maxFor(l);
                 const noCost = l.product.has_cost === false;
+                const inPromo = !!(pv?.in_promo ?? l.product.in_promo);
                 const over = l.discount > max;
                 return (
                   <li key={l.product.id} className="bg-tech-carbon border border-tech-border rounded-lg p-2.5 space-y-2">
@@ -185,16 +186,16 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
                           type="number" min={0} max={max} step={0.5} inputMode="decimal"
                           value={l.discount || ''}
                           placeholder="0"
-                          disabled={noCost || max <= 0}
+                          disabled={noCost || inPromo || max <= 0}
                           onChange={(e) => update(l.product.id, { discount: Math.max(0, Math.min(99, Number(e.target.value.replace(',', '.')) || 0)) })}
                           className={`w-16 bg-tech-card border rounded px-2 py-1 text-tech-text text-right disabled:opacity-40 ${over ? 'border-red-500' : 'border-tech-border'}`}
                         />
                         %
                       </label>
                       <span className={over ? 'text-red-400 font-bold' : 'text-tech-muted'}>
-                        {noCost ? 'sin coste: no admite descuento' : `máx. ${pct(max)} %`}
+                        {inPromo ? 'en promoción: sin descuento ni comisión' : noCost ? 'sin coste: no admite descuento' : `máx. ${pct(max)} %`}
                       </span>
-                      {!noCost && max > 0 && (
+                      {!noCost && !inPromo && max > 0 && (
                         <button onClick={() => update(l.product.id, { discount: max })} className="text-[10px] text-tech-yellow hover:underline">usar máx.</button>
                       )}
                     </div>
@@ -205,7 +206,9 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
                         {l.quantity > 1 && <span> × {l.quantity}</span>}
                       </span>
                       <span className="text-emerald-400">
-                        {pv?.commission != null
+                        {inPromo
+                          ? <span className="text-tech-muted">sin comisión (promoción)</span>
+                          : pv?.commission != null
                           ? <>Comisión <b>{formatPrice(pv.commission)}</b>{l.quantity > 1 && pv.commission_unit != null ? ` (${formatPrice(pv.commission_unit)}/ud.)` : ''}</>
                           : noCost ? <span className="text-tech-muted">sin comisión calculable</span> : '…'}
                       </span>

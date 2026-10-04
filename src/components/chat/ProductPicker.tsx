@@ -16,6 +16,8 @@ export interface ChatProductCard {
   in_stock: boolean;
   /** Solo en el panel: descuento máximo (margen mínimo del 20 % sobre el coste) y comisión por unidad. */
   has_cost?: boolean;
+  /** En promoción (DTO2): ya va al margen mínimo, sin descuento ni comisión. */
+  in_promo?: boolean;
   max_discount_pct?: number;
   commission_max?: number | null;
   commission_min?: number | null;
@@ -23,7 +25,9 @@ export interface ChatProductCard {
 
 /** «Ganas 1,98–4,82 €» por unidad, o aviso si no hay coste. */
 export const CommissionHint: React.FC<{ p: ChatProductCard }> = ({ p }) => (
-  p.has_cost === false
+  p.in_promo
+    ? <span className="text-[10px] text-amber-400">En promoción: sin descuento ni comisión</span>
+    : p.has_cost === false
     ? <span className="text-[10px] text-amber-400">Sin coste: no admite descuento</span>
     : p.commission_max != null
       ? (
