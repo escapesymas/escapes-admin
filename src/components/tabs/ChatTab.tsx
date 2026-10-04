@@ -7,7 +7,7 @@ import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBu
 import { ChatSales } from '../chat/ChatSales';
 import { MyCommissions } from '../chat/MyCommissions';
 import { AgentsManager } from '../chat/AgentsManager';
-import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications, isIOS, isStandalonePWA } from '../../utils/pushNotificationManager';
+import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications, registerServiceWorker, isIOS, isStandalonePWA } from '../../utils/pushNotificationManager';
 
 /**
  * Chat con clientes: conversaciones que el asistente IA ha pasado a un asesor
@@ -267,8 +267,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   // ¿Este dispositivo recibe los avisos del chat?
   useEffect(() => {
     if (!isPushNotificationSupported()) { setPushReady(null); return; }
-    getCurrentSubscription().then((sub) => setPushReady(!!sub)).catch(() => setPushReady(false));
+    // El service worker de los avisos (en el panel de asesores no lo registraba nadie).
+    registerServiceWorker().catch(() => {})
+      .then(() => getCurrentSubscription())
+      .then((sub) => setPushReady(!!sub))
+      .catch(() => setPushReady(false));
   }, []);
+
+  const pushDenied = typeof Notification !== 'undefined' && Notification.permission === 'denied';
 
   const enablePush = async () => {
     try {
@@ -489,6 +495,32 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
               <li>Pulsa <b className="text-tech-text">Activar avisos aquí</b> y permite las notificaciones.</li>
             </ol>
             <p className="text-tech-muted">Necesita iOS 16.4 o posterior. En Android y en el ordenador se activan directamente desde el navegador.</p>
+          </div>
+        )}
+
+        {showSettings && (
+          <div className="mt-4 pt-4 border-t border-tech-border space-y-2">
+            <p className="text-[11px] text-tech-muted flex items-center gap-1.5"><Icons.BellRing size={14} /> Avisos del chat en este dispositivo</p>
+            {pushReady === true ? (
+              <p className="text-xs text-emerald-400">Activados: te llegarán las conversaciones nuevas (si estás conectado) y los mensajes de las tuyas.</p>
+            ) : iosNeedsInstall ? (
+              <div className="text-xs text-tech-text space-y-1">
+                <p>En el iPhone los avisos solo funcionan con el panel en la pantalla de inicio:</p>
+                <ol className="list-decimal pl-4 space-y-0.5 text-tech-muted">
+                  <li>Pulsa <b className="text-tech-text">Compartir</b> (el cuadrado con la flecha) → <b className="text-tech-text">Añadir a pantalla de inicio</b>.</li>
+                  <li>Abre el panel desde ese icono, inicia sesión y vuelve aquí a <b className="text-tech-text">Ajustes</b>.</li>
+                  <li>Pulsa <b className="text-tech-text">Activar avisos</b> y permite las notificaciones (iOS 16.4 o posterior).</li>
+                </ol>
+              </div>
+            ) : pushDenied ? (
+              <p className="text-xs text-amber-300">Las notificaciones están bloqueadas para esta web. Actívalas en los ajustes del navegador o del móvil y vuelve a intentarlo.</p>
+            ) : pushReady === null && !isPushNotificationSupported() ? (
+              <p className="text-xs text-tech-muted">Este navegador no admite notificaciones. Prueba con Chrome, Edge o Firefox, o en el móvil.</p>
+            ) : (
+              <button onClick={enablePush} className="flex items-center gap-1.5 bg-tech-yellow text-black text-xs font-bold font-mono uppercase px-4 py-2 rounded-lg">
+                <Icons.BellRing size={14} /> Activar avisos
+              </button>
+            )}
           </div>
         )}
 

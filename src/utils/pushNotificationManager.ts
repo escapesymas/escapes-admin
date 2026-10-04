@@ -55,7 +55,10 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
 export async function getCurrentSubscription(): Promise<PushSubscription | null> {
   if (!isPushNotificationSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
+  // getRegistration y no `ready`: sin service worker registrado, `ready` no
+  // termina nunca (en el panel de asesores el botón de avisos no aparecía).
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return null;
   return await reg.pushManager.getSubscription();
 }
 
