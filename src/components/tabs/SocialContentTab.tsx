@@ -20,6 +20,9 @@ interface ContentSlot {
   image_prompt?: string | null;
   video_prompt?: string | null;
   final_media?: { url: string; type: 'image' | 'video'; name: string; original?: string }[];
+  base_media?: string[];
+  video_status?: 'generating' | 'done' | 'error' | null;
+  video_error?: string | null;
   status: 'draft' | 'generating' | 'ready' | 'published' | 'skipped';
   error: string | null;
 }
@@ -205,6 +208,90 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
           {uploading ? 'Subiendo…' : 'Subir imagen o vídeo final'}
         </button>
       </div>
+    </div>
+  );
+};
+
+const VIDEO_OPTIONS = [
+  { id: 'fast', label: 'Veo 3.1 Fast · mejor calidad', cost: '≈ 1,10 €' },
+  { id: 'lite', label: 'Veo 3.1 Lite · más barato', cost: '≈ 0,40 €' },
+];
+
+/**
+ * Vídeo con Veo desde el panel: se elige una imagen de apoyo como primer
+ * fotograma, se revisa el prompt y Veo lo anima (8 s, vertical). El servidor
+ * le pone los logos y lo deja en los archivos finales.
+ */
+const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void }> = ({ slot, adminToken, onChanged }) => {
+  const { showToast } = useToast();
+  // Imágenes sin logos (Veo deformaría los logotipos): las base y la foto del producto.
+  const sources = Array.from(new Set([...(slot.base_media || []), slot.product_image || ''].filter(Boolean)));
+  const [source, setSource] = useState(sources[0] || '');
+  const [prompt, setPrompt] = useState(slot.video_prompt || fallbackPrompts(slot).video);
+  const [model, setModel] = useState('fast');
+  const [busy, setBusy] = useState(false);
+  const generating = slot.video_status === 'generating';
+
+  useEffect(() => { if (!source && sources[0]) setSource(sources[0]); }, [sources, source]);
+
+  const start = async () => {
+    const opt = VIDEO_OPTIONS.find((o) => o.id === model)!;
+    if (!window.confirm(`Generar un vídeo de 8 s con ${opt.label.split(' · ')[0]} (${opt.cost} de tus créditos de Google Cloud)?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/social-content/${slot.id}/video`, {
+        method: 'POST', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceUrl: source, prompt, model }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(d.error || 'No se pudo empezar el vídeo', 'error'); onChanged(); return; }
+      showToast('Generando el vídeo… tarda 2-5 minutos', 'success');
+      onChanged();
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!sources.length) return null;
+  return (
+    <div className="border border-purple-500/30 bg-purple-500/5 rounded-xl p-4 space-y-3">
+      <p className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5"><Icons.Clapperboard size={14} /> Vídeo con IA (Veo)</p>
+      {slot.video_status === 'error' && slot.video_error && (
+        <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.video_error}</div>
+      )}
+      {generating ? (
+        <p className="text-xs text-purple-200 flex items-center gap-2"><Icons.Loader2 className="w-4 h-4 animate-spin" /> Generando el vídeo… tarda 2-5 minutos. Aparecerá abajo, en «Imagen o vídeo final», con los logos puestos.</p>
+      ) : (
+        <>
+          <div>
+            <label className={labelClass}>Imagen de partida (primer fotograma)</label>
+            <div className="flex gap-2 flex-wrap">
+              {sources.map((u) => (
+                <button key={u} onClick={() => setSource(u)}
+                  className={`rounded-lg overflow-hidden border-2 ${source === u ? 'border-purple-400' : 'border-transparent opacity-70'}`}>
+                  <img src={u} alt="" className="w-16 h-28 object-cover bg-white" />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>Qué tiene que pasar en el vídeo</label>
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} maxLength={2000} className={`${inputClass} text-xs resize-y`} />
+          </div>
+          <div className="flex gap-2 flex-wrap items-center">
+            <select value={model} onChange={(e) => setModel(e.target.value)} className={`${inputClass} w-auto`}>
+              {VIDEO_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label} ({o.cost})</option>)}
+            </select>
+            <button onClick={start} disabled={busy || !source || prompt.trim().length < 10}
+              className="bg-purple-500/80 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">
+              {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />} Generar vídeo de 8 s
+            </button>
+          </div>
+          <p className="text-[10px] text-tech-muted">Precio orientativo por vídeo, descontado de tus créditos de Google Cloud. El vídeo incluye sonido.</p>
+        </>
+      )}
     </div>
   );
 };
@@ -405,6 +492,10 @@ const SlotEditor: React.FC<{
       )}
 
       {(hasContent || slot.product_sku) && !generating && (
+        <VideoStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+      )}
+
+      {(hasContent || slot.product_sku) && !generating && (
         <ManualStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
       )}
 
@@ -548,16 +639,22 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
   // Mientras algo se está generando, se consulta cada 4 s hasta que termine.
-  const anyGenerating = slots.some((s) => s.status === 'generating');
+  const anyGenerating = slots.some((s) => s.status === 'generating' || s.video_status === 'generating');
   useEffect(() => {
     if (!anyGenerating) return;
     const t = setInterval(() => {
       const before = slotsRef.current.filter((s) => s.status === 'generating').map((s) => s.id);
+      const videosBefore = slotsRef.current.filter((s) => s.video_status === 'generating').map((s) => s.id);
       fetchSlots(true).then(() => {
         for (const id of before) {
           const s = slotsRef.current.find((x) => x.id === id);
           if (s?.status === 'ready') showToast('Contenido generado', 'success');
           else if (s?.status === 'draft' && s.error) showToast('No se pudo generar el contenido', 'error');
+        }
+        for (const id of videosBefore) {
+          const s = slotsRef.current.find((x) => x.id === id);
+          if (s?.video_status === 'done') showToast('Vídeo listo', 'success');
+          else if (s?.video_status === 'error') showToast('No se pudo generar el vídeo', 'error');
         }
       });
     }, 4000);
