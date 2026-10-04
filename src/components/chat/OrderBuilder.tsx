@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { formatPrice } from '../../utils/format';
-import { ProductPicker, CommissionHint, type ChatProductCard } from './ProductPicker';
+import { ProductPicker, CommissionHint, PriceWithOffer, offerPct, type ChatProductCard } from './ProductPicker';
 
 interface CartItem extends Partial<ChatProductCard> {
   id: number;
@@ -140,7 +140,9 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
                         <span className={`block leading-tight ${it.unavailable ? 'text-tech-muted line-through' : 'text-tech-text'}`}>{it.name}</span>
                         {!it.unavailable && <CommissionHint p={it as ChatProductCard} />}
                       </span>
-                      <span className="text-tech-muted whitespace-nowrap">{it.quantity} × {it.price ? formatPrice(it.sale_price ?? it.price) : '—'}</span>
+                      <span className="text-tech-muted whitespace-nowrap text-right">
+                        {it.price ? <>{it.quantity} × <PriceWithOffer p={{ price: it.price, sale_price: it.sale_price ?? null }} /></> : `${it.quantity} × —`}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -168,7 +170,10 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
                       {l.product.image ? <img src={l.product.image} alt="" className="w-10 h-10 object-contain bg-white rounded" /> : <span className="w-10 h-10 bg-tech-card rounded" />}
                       <span className="flex-1 min-w-0">
                         <span className="block text-xs text-tech-text leading-tight line-clamp-2">{l.product.name}</span>
-                        <span className="block text-[10px] text-tech-muted">{l.product.sku} · {l.product.in_stock ? `${l.product.stock} en stock` : 'sin stock'}</span>
+                        <span className="block text-[10px] text-tech-muted">
+                          {l.product.sku} · {l.product.in_stock ? `${l.product.stock} en stock` : 'sin stock'}
+                          {offerPct(l.product) > 0 && <> · PVP {formatPrice(l.product.price)} con oferta −{offerPct(l.product)} %</>}
+                        </span>
                       </span>
                       <span className="flex items-center gap-1">
                         <button onClick={() => update(l.product.id, { quantity: Math.max(1, l.quantity - 1) })} className="w-6 h-6 rounded border border-tech-border text-tech-muted hover:text-tech-text">−</button>

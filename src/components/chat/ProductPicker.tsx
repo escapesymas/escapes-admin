@@ -23,6 +23,22 @@ export interface ChatProductCard {
   commission_min?: number | null;
 }
 
+/** Oferta aplicada (DTO1 o promoción): % sobre el PVP. */
+export const offerPct = (p: { price: number; sale_price: number | null }) =>
+  p.sale_price != null && p.sale_price < p.price ? Math.round((1 - p.sale_price / p.price) * 100) : 0;
+
+/** Precio con la oferta: PVP tachado, precio de venta y % de descuento. */
+export const PriceWithOffer: React.FC<{ p: { price: number; sale_price: number | null }; className?: string }> = ({ p, className }) => {
+  const off = offerPct(p);
+  return (
+    <span className={className}>
+      {off > 0 && <span className="block text-[10px] text-tech-muted line-through">{formatPrice(p.price)}</span>}
+      <span className="font-bold text-tech-text">{formatPrice(p.sale_price ?? p.price)}</span>
+      {off > 0 && <span className="ml-1 text-[9px] font-bold text-tech-yellow">−{off} %</span>}
+    </span>
+  );
+};
+
 /** «Ganas 1,98–4,82 €» por unidad, o aviso si no hay coste. */
 export const CommissionHint: React.FC<{ p: ChatProductCard }> = ({ p }) => (
   p.in_promo
@@ -99,7 +115,7 @@ export const ProductPicker: React.FC<ProductPickerProps> = ({ adminToken, onPick
               <CommissionHint p={p} />
             </span>
             <span className="text-right">
-              <span className="block text-xs font-bold text-tech-text">{formatPrice(p.sale_price ?? p.price)}</span>
+              <PriceWithOffer p={p} className="block text-xs" />
               <span className={`block text-[10px] ${p.in_stock ? 'text-emerald-400' : 'text-red-400'}`}>{p.in_stock ? `${p.stock} uds.` : 'Sin stock'}</span>
             </span>
           </button>
