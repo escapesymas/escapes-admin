@@ -12,6 +12,7 @@ interface AdminLayoutProps {
   activeCartsCount: number;
   pendingReviewsCount?: number;
   unreadNotificationsCount?: number;
+  chatPendingCount?: number;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -23,7 +24,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   pendingOrdersCount,
   activeCartsCount,
   pendingReviewsCount = 0,
-  unreadNotificationsCount = 0
+  unreadNotificationsCount = 0,
+  chatPendingCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -47,6 +49,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const navItems = [
     { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
+    { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
     { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
     { id: 'products', label: 'Productos', icon: Icons.Package },
     { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount },

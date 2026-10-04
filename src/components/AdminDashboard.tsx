@@ -11,6 +11,7 @@ import SeoTab from './tabs/SeoTab';
 import MarginsTab from './tabs/MarginsTab';
 import CartsTab from './tabs/CartsTab';
 import ReviewsTab from './tabs/ReviewsTab';
+import ChatTab from './tabs/ChatTab';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
@@ -33,6 +34,8 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout }) => {
   const [activeTab, setActiveTab] = useState('stats');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [chatPending, setChatPending] = useState(0);
+  const [pendingChatId, setPendingChatId] = useState<number | null>(null);
   // Pedido a abrir cuando lleguen los pedidos (enlace de un aviso: /?tab=orders&order=123).
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -117,8 +120,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       const u = new URL(url, window.location.origin);
       const tab = u.searchParams.get('tab');
       const order = parseInt(u.searchParams.get('order') || '');
+      const chat = parseInt(u.searchParams.get('chat') || '');
       if (tab) setActiveTab(tab);
       if (Number.isFinite(order)) setPendingOrderId(order);
+      if (Number.isFinite(chat)) setPendingChatId(chat);
     } catch { /* enlace no válido: se ignora */ }
   };
 
@@ -146,6 +151,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
     const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, [adminToken]);
+
+  // Clientes esperando o con mensajes sin leer en el chat (cada 20 s).
+  useEffect(() => {
+    if (!adminToken) return;
+    const tick = () => fetch('/api/admin/chats/summary', { headers: { Authorization: `Bearer ${adminToken}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setChatPending(d.pending || 0); })
+      .catch(() => {});
+    tick();
+    const id = setInterval(tick, 20_000);
+    return () => clearInterval(id);
   }, [adminToken]);
 
   const authHeaders = () => ({ 'Authorization': `Bearer ${adminToken}` });
@@ -524,6 +541,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       pendingOrdersCount={orders.filter(o => o.status === 'pending').length}
       activeCartsCount={carts.length}
       unreadNotificationsCount={unreadNotifications}
+      chatPendingCount={chatPending}
     >
       <div className="p-4 sm:p-6 md:p-10">
         {error && (
@@ -548,6 +566,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Consola de Sincronización (Bihr)'}
               {activeTab === 'margins' && 'Precios y Márgenes'}
               {activeTab === 'notifications' && 'Avisos del panel'}
+              {activeTab === 'chat' && 'Chat con clientes'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
               {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
             </h1>
@@ -562,6 +581,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'notifications' && 'Historial de avisos y qué recibir en el móvil.'}
+              {activeTab === 'chat' && 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
             </p>
@@ -681,6 +701,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'margins' && (
           <MarginsTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} />
+        )}
+
+        {activeTab === 'chat' && (
+          <ChatTab adminToken={adminToken} initialConversationId={pendingChatId} onSummaryChange={setChatPending} />
         )}
 
         {activeTab === 'notifications' && (
