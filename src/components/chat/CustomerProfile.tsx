@@ -8,7 +8,7 @@ interface Profile {
   user: { id: number; email: string; first_name: string | null; last_name: string | null; created_at: string } | null;
   conversations: { id: number; created_at: string; status: string; agent_name: string | null; rating: number | null; offline: boolean; first_message: string | null }[];
   orders: { id: number; number: string; status: string; total: number; created_at: string; sales_channel: string | null }[];
-  notes: { id: number; author_user_id: number; author_name: string | null; body: string; created_at: string }[];
+  notes: { id: number; author_user_id: number | null; author_name: string | null; body: string; source?: string; created_at: string }[];
   spentCents: number;
 }
 
@@ -68,6 +68,7 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({ adminToken, co
 
             <section className="space-y-2">
               <h4 className="text-[10px] font-mono uppercase text-tech-muted">Notas internas (el cliente no las ve)</h4>
+              <p className="text-[10px] text-tech-muted flex items-center gap-1"><Icons.Sparkles size={11} className="text-sky-400" /> La IA apunta notas solas al cerrarse cada chat. Bórralas si no son útiles.</p>
               <div className="flex gap-2">
                 <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: prefiere Brembo, llamar si hay stock…" maxLength={2000}
                   onKeyDown={(e) => { if (e.key === 'Enter' && note.trim()) addNote(); }}
@@ -77,9 +78,13 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({ adminToken, co
               {data.notes.length === 0 && <p className="text-tech-muted">Sin notas.</p>}
               <ul className="space-y-1.5">
                 {data.notes.map((n) => (
-                  <li key={n.id} className="bg-tech-carbon border border-tech-border rounded-lg p-2 flex gap-2">
+                  <li key={n.id} className={`bg-tech-carbon border rounded-lg p-2 flex gap-2 ${n.source === 'ia' ? 'border-sky-500/30' : 'border-tech-border'}`}>
                     <span className="flex-1 whitespace-pre-wrap text-tech-text">{n.body}
-                      <span className="block text-[10px] text-tech-muted mt-0.5">{n.author_name || 'Asesor'} · {fmt(n.created_at)}</span>
+                      <span className="flex items-center gap-1 text-[10px] text-tech-muted mt-0.5">
+                        {n.source === 'ia'
+                          ? <><Icons.Sparkles size={10} className="text-sky-400" /><span className="text-sky-300">IA</span></>
+                          : (n.author_name || 'Asesor')} · {fmt(n.created_at)}
+                      </span>
                     </span>
                     <button onClick={() => removeNote(n.id)} className="text-tech-muted hover:text-red-400 self-start" aria-label="Borrar nota"><Icons.Trash2 size={13} /></button>
                   </li>

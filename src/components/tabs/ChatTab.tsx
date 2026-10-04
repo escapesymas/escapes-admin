@@ -66,6 +66,7 @@ interface ConversationDetail {
   customerReadId?: number;
   offline?: boolean;
   summary?: string | null;
+  summaryStale?: boolean;
   rating?: number | null;
   rating_comment?: string | null;
   customer: { name: string; email: string } | null;
@@ -161,6 +162,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const [showProfile, setShowProfile] = useState(false);
   const [transferAgents, setTransferAgents] = useState<{ id: number; name: string; available: boolean; online: boolean; paused: boolean; open_chats: number }[] | null>(null);
   const [summaryBusy, setSummaryBusy] = useState(false);
+  // Al abrir una conversación el servidor rehace el resumen si hay mensajes nuevos;
+  // mientras llega (como mucho ~45 s) se muestra «Generando resumen…».
+  const openedAtRef = useRef(0);
   const [suggesting, setSuggesting] = useState(false);
   const lastTypingRef = useRef(0);
   const { replies: quickReplies, reload: reloadReplies } = useQuickReplies(adminToken);
@@ -279,6 +283,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
     setShowReplies(false);
     setTransferAgents(null);
     if (!selectedId) return;
+    openedAtRef.current = Date.now();
     loadConversation(true);
     const id = setInterval(() => loadConversation(false), 3000);
     return () => clearInterval(id);
@@ -834,17 +839,22 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   </div>
                 </div>
 
-                {detail && (detail.summary || active) && (
-                  <div className="flex items-start gap-2 px-4 py-2 border-b border-tech-border bg-sky-500/5 text-xs">
-                    <Icons.Sparkles size={14} className="text-sky-400 mt-0.5 shrink-0" />
-                    {detail.summary
-                      ? <p className="flex-1 text-tech-text whitespace-pre-wrap"><b className="text-sky-300">Resumen IA: </b>{detail.summary}</p>
-                      : <p className="flex-1 text-tech-muted">Sin resumen todavía.</p>}
-                    <button onClick={regenerateSummary} disabled={summaryBusy} className="text-[10px] font-mono uppercase text-sky-300 hover:underline shrink-0 disabled:opacity-50">
-                      {summaryBusy ? 'Resumiendo…' : detail.summary ? 'Actualizar' : 'Resumir'}
-                    </button>
-                  </div>
-                )}
+                {detail && (detail.summary || active || detail.summaryStale) && (() => {
+                  const generating = summaryBusy || (!!detail.summaryStale && Date.now() - openedAtRef.current < 45_000);
+                  return (
+                    <div className="flex items-start gap-2 px-4 py-2 border-b border-tech-border bg-sky-500/5 text-xs">
+                      <Icons.Sparkles size={14} className={`text-sky-400 mt-0.5 shrink-0 ${generating ? 'animate-pulse' : ''}`} />
+                      {detail.summary
+                        ? <p className="flex-1 text-tech-text whitespace-pre-wrap"><b className="text-sky-300">Resumen IA{generating ? ' (actualizando…)' : ''}: </b>{detail.summary}</p>
+                        : <p className="flex-1 text-tech-muted">{generating ? 'Generando resumen…' : 'Sin resumen todavía.'}</p>}
+                      {!generating && (
+                        <button onClick={regenerateSummary} className="text-[10px] font-mono uppercase text-sky-300 hover:underline shrink-0">
+                          {detail.summary ? 'Actualizar' : 'Resumir'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {(draft.length > 0 || detail?.chatOrders?.length) ? (
                   <button
