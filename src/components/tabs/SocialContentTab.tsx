@@ -17,6 +17,9 @@ interface ContentSlot {
   hashtags: string | null;
   script: string | null;
   media_urls: string[];
+  image_prompt?: string | null;
+  video_prompt?: string | null;
+  final_media?: { url: string; type: 'image' | 'video'; name: string }[];
   status: 'draft' | 'generating' | 'ready' | 'published' | 'skipped';
   error: string | null;
 }
@@ -82,6 +85,126 @@ const ProductSearch: React.FC<{ adminToken: string; onPick: (p: ChatProductCard)
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+/** Prompts por defecto si la publicación se generó antes de que la IA los escribiera. */
+const fallbackPrompts = (slot: ContentSlot) => {
+  const what = slot.product_name || 'el producto de la foto';
+  return {
+    image: `Crea una foto vertical 9:16, realista y publicitaria, para TikTok con ${what} de la foto adjunta. `
+      + `Escena de garaje o carretera de montaña con buena luz${slot.topic ? `, enfoque: ${slot.topic}` : ''}. `
+      + 'Conserva exactamente la forma, los colores y los logotipos del producto. Sin texto.',
+    video: `Vídeo vertical 9:16 de 8 segundos para TikTok a partir de la foto de ${what}. `
+      + 'Plano de detalle que se abre a la moto en ambiente motero, movimiento de cámara suave, luz cálida y sonido ambiente realista. '
+      + 'Sin texto en pantalla y sin cambiar el producto.',
+  };
+};
+
+/**
+ * Hacerlo con el plan Google AI Pro: prompts listos para la app de Gemini
+ * (imagen) y Flow/Veo (vídeo), la foto real para adjuntar y la subida del
+ * resultado final a la publicación.
+ */
+const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void }> = ({ slot, adminToken, onChanged }) => {
+  const { showToast } = useToast();
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const fallback = fallbackPrompts(slot);
+  const imagePrompt = slot.image_prompt || fallback.image;
+  const videoPrompt = slot.video_prompt || fallback.video;
+  const photo = slot.product_image || slot.media_urls?.find((u) => !u.includes('/social-content/')) || null;
+
+  const copy = (value: string, what: string) => {
+    navigator.clipboard?.writeText(value);
+    showToast(`${what} copiado`, 'success');
+  };
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/social-content/${slot.id}/final`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` }, body: form });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(d.error || 'No se pudo subir', 'error'); return; }
+      showToast('Archivo final guardado', 'success');
+      onChanged();
+    } catch {
+      showToast('Error de conexión al subir', 'error');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const remove = async (url: string) => {
+    if (!window.confirm('¿Quitar este archivo de la publicación?')) return;
+    const res = await fetch(`/api/social-content/${slot.id}/final?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
+    if (res.ok) onChanged(); else showToast('No se pudo quitar', 'error');
+  };
+
+  const btn = 'bg-tech-border hover:bg-tech-border/70 text-tech-text px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5';
+
+  return (
+    <div className="border border-sky-500/30 bg-sky-500/5 rounded-xl p-4 space-y-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5"><Icons.Wand2 size={14} /> Con tu plan de Gemini</p>
+        <p className="text-[11px] text-tech-muted mt-1">
+          1. Guarda la foto del producto. 2. Copia el prompt y pégalo en Gemini (imagen) o en Flow (vídeo) adjuntando la foto.
+          3. Descarga el resultado y súbelo aquí.
+        </p>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        {photo && <a href={photo} target="_blank" rel="noreferrer" download className={btn}><Icons.Download size={13} /> Foto del producto</a>}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-2">
+          <p className="text-[10px] uppercase font-black tracking-widest text-tech-muted flex items-center gap-1"><Icons.Image size={12} /> Imagen · app de Gemini</p>
+          <p className="text-xs text-tech-text whitespace-pre-wrap line-clamp-6">{imagePrompt}</p>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => copy(imagePrompt, 'Prompt de imagen')} className={btn}><Icons.Copy size={13} /> Copiar prompt</button>
+            <a href="https://gemini.google.com/app" target="_blank" rel="noreferrer" className={btn}><Icons.ExternalLink size={13} /> Abrir Gemini</a>
+          </div>
+        </div>
+        <div className="bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-2">
+          <p className="text-[10px] uppercase font-black tracking-widest text-tech-muted flex items-center gap-1"><Icons.Clapperboard size={12} /> Vídeo · Flow (Veo)</p>
+          <p className="text-xs text-tech-text whitespace-pre-wrap line-clamp-6">{videoPrompt}</p>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => copy(videoPrompt, 'Prompt de vídeo')} className={btn}><Icons.Copy size={13} /> Copiar prompt</button>
+            <a href="https://labs.google/fx/tools/flow" target="_blank" rel="noreferrer" className={btn}><Icons.ExternalLink size={13} /> Abrir Flow</a>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[10px] uppercase font-black tracking-widest text-tech-muted">Imagen o vídeo final</p>
+        {!!slot.final_media?.length && (
+          <div className="flex gap-2 flex-wrap">
+            {slot.final_media.map((m) => (
+              <div key={m.url} className="relative">
+                {m.type === 'video'
+                  ? <video src={m.url} controls playsInline className="w-36 h-64 object-cover rounded-lg border border-tech-border bg-black" />
+                  : <a href={m.url} target="_blank" rel="noreferrer"><img src={m.url} alt={m.name} className="w-36 h-64 object-cover rounded-lg border border-tech-border" /></a>}
+                <div className="absolute top-1 right-1 flex gap-1">
+                  <a href={m.url} download={m.name} className="bg-black/70 text-white rounded p-1" aria-label="Descargar"><Icons.Download size={12} /></a>
+                  <button onClick={() => remove(m.url)} className="bg-black/70 text-red-300 rounded p-1" aria-label="Quitar"><Icons.Trash2 size={12} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
+          {uploading ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Upload size={13} />}
+          {uploading ? 'Subiendo…' : 'Subir imagen o vídeo final'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -276,6 +399,10 @@ const SlotEditor: React.FC<{
         </div>
       )}
 
+      {(hasContent || slot.product_sku) && !generating && (
+        <ManualStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+      )}
+
       <div className="flex justify-end gap-4 pt-2 border-t border-tech-border/30">
         {(slot.status === 'draft' || slot.status === 'ready') && (
           <button onClick={() => patch({ status: 'skipped' }, 'Publicación omitida')} className="text-tech-muted hover:text-tech-text text-xs font-bold flex items-center gap-1">
@@ -455,6 +582,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="text-lg font-black text-tech-text w-14 shrink-0">{date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+                    {slot.final_media?.length ? <Icons.CheckCircle2 size={14} className="text-sky-400 shrink-0" /> : null}
                     {(slot.media_urls?.[0] || slot.product_image)
                       ? <img src={slot.media_urls?.[0] || slot.product_image || ''} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
                       : <div className="w-10 h-10 rounded bg-tech-border/50 shrink-0 grid place-items-center"><Icons.Image size={14} className="text-tech-muted" /></div>}
