@@ -232,7 +232,7 @@ export const OrderBuilder: React.FC<OrderBuilderProps> = ({
               <p className="flex justify-between text-tech-muted"><span>Envío (Península)</span><span>{preview.quote.shipping > 0 ? formatPrice(preview.quote.shipping) : 'Gratis'}</span></p>
               <p className="flex justify-between font-bold text-tech-text text-sm"><span>Total aprox. para el cliente</span><span>{formatPrice(preview.quote.total)}</span></p>
               <p className="flex justify-between font-bold text-emerald-400 text-sm pt-1 border-t border-tech-border"><span>Tu comisión</span><span>{formatPrice(preview.commissionTotal)}</span></p>
-              <p className="text-[10px] text-tech-muted">Comisión = 50 % del margen neto (precio sin IVA − coste − comisión de pago). Cuenta cuando el cliente paga.</p>
+              <p className="text-[10px] text-tech-muted">Comisión = 50 % del margen neto (precio sin IVA − coste − comisión del cobro − coste de pagarte la comisión). Cuenta cuando el cliente paga.</p>
             </section>
           )}
 
