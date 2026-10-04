@@ -15,6 +15,8 @@ interface ChatOrderRow {
   estimate_cents: number | null;
   /** Solo los productos del asesor (sin el resto del carrito ni el envío). */
   attributed_cents: number | null;
+  estimate_commission_cents: number | null;
+  commission_cents: number | null;
   order_id: number | null;
   order_number: string | null;
   order_status: string | null;
@@ -31,6 +33,8 @@ interface AgentSummary {
   ordered: number;
   paid: number;
   paid_cents: number;
+  commission_paid: number;
+  commission_pending: number;
 }
 
 interface ChatSalesProps {
@@ -83,6 +87,8 @@ export const ChatSales: React.FC<ChatSalesProps> = ({ adminToken, onOpenConversa
               <div><p className="text-lg font-black text-emerald-400">{a.paid}</p><p className="text-[9px] uppercase font-mono text-tech-muted">Pagados</p></div>
             </div>
             <p className="mt-3 text-sm text-tech-text">Vendido (sus productos, pagados): <span className="font-bold">{formatPrice(a.paid_cents)}</span></p>
+            <p className="text-sm text-tech-text">Comisión ganada: <span className="font-bold text-emerald-400">{formatPrice(a.commission_paid)}</span></p>
+            {a.commission_pending > 0 && <p className="text-[11px] text-tech-muted">Pendiente de pago del cliente: {formatPrice(a.commission_pending)}</p>}
           </div>
         ))}
       </div>
@@ -98,12 +104,13 @@ export const ChatSales: React.FC<ChatSalesProps> = ({ adminToken, onOpenConversa
               <th className="text-left p-3">Estado</th>
               <th className="text-right p-3">Pedido</th>
               <th className="text-right p-3" title="Productos preparados por el asesor, sin envío ni el resto del carrito">Del asesor</th>
+              <th className="text-right p-3" title="50 % del margen neto de sus productos">Comisión</th>
               <th className="p-3" />
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={8} className="p-4 text-tech-muted">Cargando…</td></tr>}
-            {!loading && orders.length === 0 && <tr><td colSpan={8} className="p-4 text-tech-muted">Sin pedidos del chat este mes.</td></tr>}
+            {loading && <tr><td colSpan={9} className="p-4 text-tech-muted">Cargando…</td></tr>}
+            {!loading && orders.length === 0 && <tr><td colSpan={9} className="p-4 text-tech-muted">Sin pedidos del chat este mes.</td></tr>}
             {orders.map((r) => (
               <tr key={r.id} className="border-b border-tech-border last:border-0">
                 <td className="p-3 text-tech-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
@@ -116,6 +123,11 @@ export const ChatSales: React.FC<ChatSalesProps> = ({ adminToken, onOpenConversa
                 </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {r.attributed_cents != null ? <span className={r.paid ? 'text-emerald-400 font-bold' : 'text-tech-text'}>{formatPrice(r.attributed_cents)}</span> : <span className="text-tech-muted">—</span>}
+                </td>
+                <td className="p-3 text-right whitespace-nowrap">
+                  {r.commission_cents != null
+                    ? <span className={r.paid ? 'text-emerald-400 font-bold' : 'text-tech-text'}>{formatPrice(r.commission_cents)}</span>
+                    : r.estimate_commission_cents != null ? <span className="text-tech-muted">≈ {formatPrice(r.estimate_commission_cents)}</span> : '—'}
                 </td>
                 <td className="p-3 text-right">
                   {r.conversation_id && (

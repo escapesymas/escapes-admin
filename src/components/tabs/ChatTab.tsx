@@ -3,7 +3,7 @@ import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import { formatPrice } from '../../utils/format';
 import { ProductPicker } from '../chat/ProductPicker';
-import { OrderBuilder } from '../chat/OrderBuilder';
+import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBuilder';
 import { ChatSales } from '../chat/ChatSales';
 
 /**
@@ -54,6 +54,7 @@ interface ConversationDetail {
   customer: { name: string; email: string } | null;
   orders: { id: number; status: string; total: number; created_at: string }[];
   garage: { brand: string; model: string; year: number | null }[];
+  chatOrders?: { id: number; created_at: string; estimate_commission_cents: number | null; commission_cents: number | null; order_id: number | null; order_status: string | null }[];
 }
 
 interface SupportSettings {
@@ -156,6 +157,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Pedido en preparación de cada conversación (se conserva al cerrar el panel lateral).
+  const [drafts, setDrafts] = useState<Record<number, DraftLine[]>>({});
+  const [preview, setPreview] = useState<OrderPreview | null>(null);
+  const draft = selectedId ? drafts[selectedId] || [] : [];
+  const setDraft = (fn: (prev: DraftLine[]) => DraftLine[]) => {
+    if (!selectedId) return;
+    setDrafts((all) => ({ ...all, [selectedId]: fn(all[selectedId] || []) }));
+  };
+
   const authOnly = { Authorization: `Bearer ${adminToken}` };
   const headers = { ...authOnly, 'Content-Type': 'application/json' };
 
@@ -246,6 +256,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Importes y comisión del borrador, calculados por el servidor.
+  const draftKey = JSON.stringify(draft.map((l) => [l.product.id, l.quantity, l.discount]));
+  useEffect(() => {
+    if (!selectedId || draft.length === 0) { setPreview(null); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/admin/chats/${selectedId}/order-preview`, {
+        method: 'POST', headers, signal: ctrl.signal,
+        body: JSON.stringify({ items: draft.map((l) => ({ id: l.product.id, quantity: l.quantity, discount: l.discount })) }),
+      }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPreview(d)).catch(() => {});
+    }, 300);
+    return () => { clearTimeout(t); ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, draftKey]);
 
   const saveSettings = async (next: SupportSettings, withName = false) => {
     setSavingSettings(true);
@@ -527,6 +552,32 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   </div>
                 </div>
 
+                {(draft.length > 0 || detail?.chatOrders?.length) ? (
+                  <button
+                    onClick={() => setShowOrder(true)}
+                    className="flex items-center gap-2 px-4 py-2 border-b border-tech-border bg-emerald-500/5 text-left hover:bg-emerald-500/10"
+                  >
+                    <Icons.BadgeEuro size={16} className="text-emerald-400" />
+                    {draft.length > 0 ? (
+                      <span className="text-xs text-tech-text flex-1">
+                        Pedido en preparación ({draft.reduce((a, l) => a + l.quantity, 0)} uds.) · tu comisión:{' '}
+                        <b className="text-emerald-400">{formatPrice(preview?.commissionTotal || 0)}</b>
+                      </span>
+                    ) : (() => {
+                      const last = detail!.chatOrders![0];
+                      const c = last.commission_cents ?? last.estimate_commission_cents;
+                      return (
+                        <span className="text-xs text-tech-text flex-1">
+                          Último pedido enviado · comisión {last.commission_cents != null ? '' : 'estimada '}
+                          <b className="text-emerald-400">{c != null ? formatPrice(c) : '—'}</b>
+                          <span className="text-tech-muted"> · {last.order_id ? (last.order_status || 'creado') : 'pendiente de que el cliente lo abra'}</span>
+                        </span>
+                      );
+                    })()}
+                    <span className="text-[10px] font-mono uppercase text-tech-muted">Ver pedido</span>
+                  </button>
+                ) : null}
+
                 <div
                   ref={scrollRef}
                   onDragOver={(e) => { if (active) { e.preventDefault(); setDragOver(true); } }}
@@ -615,8 +666,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           adminToken={adminToken}
           conversationId={selectedId}
           customerName={detail.customer?.name || 'el cliente'}
+          lines={draft}
+          setLines={setDraft}
+          preview={preview}
           onClose={() => setShowOrder(false)}
-          onSent={(msgs) => { appendMessages(msgs); loadList(); }}
+          onSent={(msgs) => { appendMessages(msgs); loadList(); loadConversation(true); }}
           showToast={showToast}
         />
       )}

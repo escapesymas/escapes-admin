@@ -14,7 +14,25 @@ export interface ChatProductCard {
   image: string | null;
   slug: string;
   in_stock: boolean;
+  /** Solo en el panel: descuento máximo (margen mínimo del 20 % sobre el coste) y comisión por unidad. */
+  has_cost?: boolean;
+  max_discount_pct?: number;
+  commission_max?: number | null;
+  commission_min?: number | null;
 }
+
+/** «Ganas 1,98–4,82 €» por unidad, o aviso si no hay coste. */
+export const CommissionHint: React.FC<{ p: ChatProductCard }> = ({ p }) => (
+  p.has_cost === false
+    ? <span className="text-[10px] text-amber-400">Sin coste: no admite descuento</span>
+    : p.commission_max != null
+      ? (
+        <span className="text-[10px] text-emerald-400">
+          Ganas {formatPrice(p.commission_min ?? 0)}–{formatPrice(p.commission_max)} · dto. máx. {String(p.max_discount_pct ?? 0).replace('.', ',')} %
+        </span>
+      )
+      : null
+);
 
 interface ProductPickerProps {
   adminToken: string;
@@ -74,6 +92,7 @@ export const ProductPicker: React.FC<ProductPickerProps> = ({ adminToken, onPick
             <span className="flex-1 min-w-0">
               <span className="block text-xs text-tech-text leading-tight line-clamp-2">{p.name}</span>
               <span className="block text-[10px] text-tech-muted">{p.sku} · {p.brand}</span>
+              <CommissionHint p={p} />
             </span>
             <span className="text-right">
               <span className="block text-xs font-bold text-tech-text">{formatPrice(p.sale_price ?? p.price)}</span>
