@@ -17,6 +17,32 @@ interface AdminLayoutProps {
   isAdvisor?: boolean;
 }
 
+/**
+ * Detecta si se ha desplegado una versión nueva del panel (el index.html apunta
+ * a otro bundle). La app instalada en el móvil puede seguir abierta días con la
+ * versión vieja; se comprueba al volver a la app y cada 5 minutos.
+ */
+function useNewVersion(): boolean {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    const current = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/"]')?.getAttribute('src');
+    if (!current) return; // en desarrollo no hay bundle
+    let stopped = false;
+    const check = async () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      try {
+        const html = await fetch(`/?v=${Date.now()}`, { cache: 'no-store' }).then((r) => r.text());
+        const latest = html.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/)?.[1];
+        if (latest && latest !== current) setAvailable(true);
+      } catch { /* sin conexión: se reintenta */ }
+    };
+    const id = setInterval(check, 5 * 60_000);
+    document.addEventListener('visibilitychange', check);
+    return () => { stopped = true; clearInterval(id); document.removeEventListener('visibilitychange', check); };
+  }, []);
+  return available;
+}
+
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   children,
   activeTab,
@@ -32,6 +58,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const newVersion = useNewVersion();
   
   const adminEmail = session?.user_email || 'admin@escapesymas.com';
 
@@ -229,6 +256,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       <main className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
         {children}
       </main>
+
+      {/* Fondo bajo la barra de estado del móvil (app instalada): el contenido no se ve detrás al hacer scroll. */}
+      {isMobile && <div className="fixed inset-x-0 top-0 h-[env(safe-area-inset-top)] bg-tech-card z-[45] md:hidden pointer-events-none" />}
+
+      {newVersion && (
+        <button
+          onClick={() => window.location.reload()}
+          className="fixed z-[70] left-1/2 -translate-x-1/2 bottom-[max(1rem,env(safe-area-inset-bottom))] bg-tech-yellow text-black text-xs font-bold px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2"
+        >
+          <Icons.RefreshCw size={14} /> Hay una versión nueva del panel · Actualizar
+        </button>
+      )}
     </div>
   );
 };

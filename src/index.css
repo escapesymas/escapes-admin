@@ -7,7 +7,9 @@
     touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
-    overflow-x: hidden;
+    /* clip y no hidden: hidden en html y body rompe position: sticky en Safari
+       (la barra superior del móvil dejaba de quedarse fija). */
+    overflow-x: clip;
   }
 
   body {
