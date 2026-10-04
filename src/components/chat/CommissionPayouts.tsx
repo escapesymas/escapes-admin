@@ -5,6 +5,7 @@ import { formatPrice } from '../../utils/format';
 /**
  * Pagos de comisiones: lo que hay que pagar a cada asesor y el registro de
  * cada pago (marca como cobradas todas sus comisiones disponibles).
+ * Pendiente de colocar en el futuro módulo de pagos a asesores del panel.
  */
 
 interface AgentRow {

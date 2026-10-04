@@ -6,7 +6,6 @@ import { ProductPicker } from '../chat/ProductPicker';
 import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBuilder';
 import { ChatSales } from '../chat/ChatSales';
 import { MyCommissions } from '../chat/MyCommissions';
-import { CommissionPayouts } from '../chat/CommissionPayouts';
 
 /**
  * Chat con clientes: conversaciones que el asistente IA ha pasado a un asesor
@@ -138,8 +137,6 @@ const MessageBody: React.FC<{ m: Message }> = ({ m }) => {
 const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange }) => {
   const { showToast } = useToast();
   const [view, setView] = useState<'chats' | 'sales' | 'commissions'>('chats');
-  // Asesor cuyas comisiones se consultan (null = el que ha iniciado sesión).
-  const [commissionAgent, setCommissionAgent] = useState<number | null>(null);
   const [scope, setScope] = useState<'open' | 'closed'>('open');
   const [list, setList] = useState<ConversationItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -472,7 +469,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       {/* Conversaciones / ventas */}
       <div className="flex gap-2 text-[10px] font-mono uppercase">
         {([['chats', 'Conversaciones', Icons.MessagesSquare], ['sales', 'Ventas del chat', Icons.BadgeEuro], ['commissions', 'Mis comisiones', Icons.Wallet]] as const).map(([v, label, Icon]) => (
-          <button key={v} onClick={() => { setView(v); if (v === 'commissions') setCommissionAgent(null); }}
+          <button key={v} onClick={() => setView(v)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border ${view === v ? 'border-tech-yellow text-tech-yellow' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}>
             <Icon size={14} /> {label}
           </button>
@@ -480,15 +477,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       </div>
 
       {view === 'sales' && (
-        <div className="space-y-4">
-          <CommissionPayouts adminToken={adminToken} showToast={showToast}
-            onViewAgent={(id) => { setCommissionAgent(id); setView('commissions'); }} />
-          <ChatSales adminToken={adminToken} onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
-        </div>
+        <ChatSales adminToken={adminToken} onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
       )}
 
       {view === 'commissions' && (
-        <MyCommissions adminToken={adminToken} agentId={commissionAgent}
+        <MyCommissions adminToken={adminToken}
           onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
       )}
 
