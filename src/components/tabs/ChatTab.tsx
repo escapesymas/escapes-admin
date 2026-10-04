@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import { formatPrice } from '../../utils/format';
@@ -100,7 +101,7 @@ function timeAgo(iso: string): string {
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
 /** Contenido de un mensaje según su tipo (texto, producto, imagen o pedido). */
-const MessageBody: React.FC<{ m: Message }> = ({ m }) => {
+const MessageBody: React.FC<{ m: Message; onOpenImage?: (url: string) => void }> = ({ m, onOpenImage }) => {
   if (m.kind === 'product' && m.payload) {
     const p = m.payload;
     return (
@@ -117,9 +118,9 @@ const MessageBody: React.FC<{ m: Message }> = ({ m }) => {
   if (m.kind === 'image' && m.payload?.url) {
     return (
       <div className="mt-1 space-y-1">
-        <a href={m.payload.url} target="_blank" rel="noopener noreferrer">
+        <button type="button" onClick={() => onOpenImage?.(m.payload.url)} className="block cursor-zoom-in" title="Ampliar">
           <img src={m.payload.url} alt={m.content || 'Imagen'} className="rounded-lg max-h-60 object-contain bg-black/10" loading="lazy" />
-        </a>
+        </button>
         {m.content && <p>{m.content}</p>}
       </div>
     );
@@ -146,6 +147,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const [myOnline, setMyOnline] = useState(false);
   const [pushReady, setPushReady] = useState<boolean | null>(null);
   const [showIosHelp, setShowIosHelp] = useState(false);
+  // Hueco en la cabecera de la página para Conectado / avisos / ajustes.
+  const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
+  useEffect(() => { setHeaderEl(document.getElementById('chat-header-actions')); }, []);
+  // Imagen ampliada (visor).
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
   // En el iPhone solo hay avisos con la web añadida a la pantalla de inicio.
   const iosNeedsInstall = typeof window !== 'undefined' && isIOS() && !isStandalonePWA() && !isPushNotificationSupported();
   const [scope, setScope] = useState<'open' | 'closed'>('open');
@@ -434,44 +446,51 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const unassigned = active && !detail?.agent_user_id;
 
   return (
-    <div className="space-y-4 py-4">
-      {/* Estado, horario y ajustes */}
-      <div className="bg-tech-card border border-tech-border rounded-xl p-4">
-        <div className="flex flex-wrap items-center gap-3">
+    <div className={view === 'chats' ? 'flex flex-col gap-3 md:h-[calc(100vh-9.5rem)]' : 'space-y-4'}>
+      {/* Conectado, avisos y ajustes: en la cabecera de la página. El estado
+          (si la IA ofrece asesor, horario, conectados) va en el tooltip. */}
+      {headerEl && createPortal(
+        <>
           <button
             onClick={() => saveAgentStatus({ online: !myOnline })}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono uppercase font-bold ${myOnline ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}
-            title={myOnline ? 'Pulsa para dejar de recibir clientes' : 'Pulsa para empezar a atender'}
+            title={`${status?.available ? 'La IA ofrece hablar con un asesor' : status?.inHours ? 'Nadie conectado: la IA da el email y el horario' : 'Fuera de horario: la IA da el horario y el email'}\nHorario: ${status?.hoursText || '…'}${!status?.inHours && status?.nextOpen ? ` · Abre ${status.nextOpen}` : ''}\nAsesores conectados: ${status?.onlineAgents ?? 0}\n\n${myOnline ? 'Pulsa para dejar de recibir clientes' : 'Pulsa para empezar a atender'}`}
           >
             <span className={`w-2.5 h-2.5 rounded-full ${myOnline ? 'bg-emerald-500' : 'bg-slate-500'}`} />
             {myOnline ? 'Conectado' : 'Desconectado'}
           </button>
-          <div className="flex-1 min-w-[200px]">
-            <p className="text-sm font-bold text-tech-text">
-              {status?.available
-                ? 'La IA ofrece hablar con un asesor'
-                : status?.inHours ? 'Nadie conectado: la IA da el email y el horario' : 'Fuera de horario: la IA da el horario y el email'}
-            </p>
-            <p className="text-[11px] text-tech-muted">
-              Horario: {status?.hoursText || '…'}{!status?.inHours && status?.nextOpen ? ` · Abre ${status.nextOpen}` : ''}
-              {' · '}Asesores conectados: {status?.onlineAgents ?? 0}
-            </p>
-          </div>
           {pushReady === false && (
             <button onClick={enablePush} className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-yellow border border-tech-yellow/40 rounded-lg px-2.5 py-2">
-              <Icons.BellRing size={14} /> Activar avisos aquí
+              <Icons.BellRing size={14} /> Activar avisos
             </button>
           )}
           {pushReady === true && (
-            <span className="flex items-center gap-1 text-[10px] font-mono uppercase text-emerald-400"><Icons.BellRing size={14} /> Avisos activos</span>
+            <span className="flex items-center gap-1 text-[10px] font-mono uppercase text-emerald-400 px-1"><Icons.BellRing size={14} /> Avisos activos</span>
           )}
           {iosNeedsInstall && (
             <button onClick={() => setShowIosHelp((v) => !v)} className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-yellow border border-tech-yellow/40 rounded-lg px-2.5 py-2">
               <Icons.BellRing size={14} /> Avisos en el iPhone
             </button>
           )}
-          {!isAdvisor && settings && (
-            <div className="flex rounded-lg border border-tech-border overflow-hidden text-[10px] font-mono uppercase" title="Horario de atención">
+          <button onClick={() => setShowSettings((v) => !v)}
+            className={`text-[10px] font-mono uppercase flex items-center gap-1 border rounded-lg px-2.5 py-2 ${showSettings ? 'border-tech-yellow text-tech-yellow' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}>
+            <Icons.Settings2 size={14} /> Ajustes
+          </button>
+        </>,
+        headerEl,
+      )}
+
+      {((showIosHelp && iosNeedsInstall) || showSettings) && (
+      <div className="bg-tech-card border border-tech-border rounded-xl p-4 max-h-[45vh] overflow-y-auto shrink-0">
+        {showSettings && !isAdvisor && settings && (
+          <div className="flex flex-wrap items-center gap-3 mb-1">
+            <p className="text-[11px] text-tech-muted">
+              {status?.available
+                ? 'La IA ofrece hablar con un asesor'
+                : status?.inHours ? 'Nadie conectado: la IA da el email y el horario' : 'Fuera de horario: la IA da el horario y el email'}
+              {` · Asesores conectados: ${status?.onlineAgents ?? 0} · Horario:`}
+            </p>
+            <div className="flex rounded-lg border border-tech-border overflow-hidden text-[10px] font-mono uppercase">
               {([['auto', 'Según horario'], ['on', 'Siempre'], ['off', 'Cerrado']] as const).map(([m, label]) => (
                 <button key={m} onClick={() => saveSettings({ ...settings, mode: m })} disabled={savingSettings}
                   className={`px-3 py-2 ${settings.mode === m ? 'bg-tech-yellow text-black font-bold' : 'text-tech-muted hover:text-tech-text'}`}>
@@ -479,11 +498,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                 </button>
               ))}
             </div>
-          )}
-          <button onClick={() => setShowSettings((v) => !v)} className="text-[10px] font-mono uppercase text-tech-muted hover:text-tech-text flex items-center gap-1">
-            <Icons.Settings2 size={14} /> Ajustes
-          </button>
-        </div>
+          </div>
+        )}
 
         {showIosHelp && iosNeedsInstall && (
           <div className="mt-3 text-xs text-tech-text bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-1">
@@ -588,6 +604,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           </div>
         )}
       </div>
+      )}
 
       {/* Conversaciones / ventas */}
       <div className="flex gap-2 text-[10px] font-mono uppercase">
@@ -615,9 +632,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       )}
 
       {view === 'chats' && (
-        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 min-h-[60vh]">
+        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 min-h-[60vh] md:min-h-0 md:flex-1">
           {/* Lista */}
-          <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col ${selectedId ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col md:min-h-0 ${selectedId ? 'hidden md:flex' : 'flex'}`}>
             <div className="flex border-b border-tech-border text-[10px] font-mono uppercase">
               {(['open', 'closed'] as const).map((sc) => (
                 <button key={sc} onClick={() => setScope(sc)}
@@ -652,7 +669,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           </div>
 
           {/* Conversación */}
-          <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col ${selectedId ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col md:min-h-0 ${selectedId ? 'flex' : 'hidden md:flex'}`}>
             {!selectedId && (
               <div className="flex-1 flex items-center justify-center text-sm text-tech-muted p-8 text-center">Elige una conversación para responder.</div>
             )}
@@ -718,7 +735,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   onDragOver={(e) => { if (active) { e.preventDefault(); setDragOver(true); } }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={(e) => active && onDrop(e)}
-                  className={`flex-1 overflow-y-auto p-4 space-y-2.5 max-h-[55vh] md:max-h-[60vh] ${dragOver ? 'outline-2 outline-dashed outline-tech-yellow' : ''}`}
+                  className={`flex-1 min-h-0 overflow-y-auto p-4 space-y-2.5 max-h-[55vh] md:max-h-none ${dragOver ? 'outline-2 outline-dashed outline-tech-yellow' : ''}`}
                 >
                   {messages.map((m) => (
                     m.sender === 'system' ? (
@@ -733,7 +750,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                           <p className={`text-[9px] font-mono uppercase mb-0.5 ${m.sender === 'agent' ? 'text-black/60' : 'text-tech-muted'}`}>
                             {m.sender === 'agent' ? 'Tú' : m.sender === 'customer' ? 'Cliente' : 'Asistente IA'} · {hhmm(m.created_at)}
                           </p>
-                          <MessageBody m={m} />
+                          <MessageBody m={m} onOpenImage={setLightbox} />
                         </div>
                       </div>
                     )
@@ -793,6 +810,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="Imagen ampliada" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 text-white/80 hover:text-white" aria-label="Cerrar"><Icons.X size={28} /></button>
         </div>
       )}
 

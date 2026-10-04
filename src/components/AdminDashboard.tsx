@@ -549,7 +549,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       chatPendingCount={chatPending}
       isAdvisor={isAdvisor}
     >
-      <div className="p-4 sm:p-6 md:p-10">
+      <div className={activeTab === 'chat' ? 'p-4 sm:p-6' : 'p-4 sm:p-6 md:p-10'}>
         {error && (
           <div className="mb-6 p-4 bg-red-950/20 border border-red-900/30 text-red-400 text-xs rounded-xl flex items-center gap-3">
             <Icons.AlertTriangle className="w-5 h-5 shrink-0" />
@@ -559,7 +559,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         <ErrorBoundary fallbackTitle="Error al cargar el panel">
 
         {/* Tab Header */}
-        <header className="mb-6 md:mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-tech-border pb-6 gap-4">
+        <header className={`flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-tech-border gap-4 ${activeTab === 'chat' ? 'mb-4 pb-4' : 'mb-6 md:mb-10 pb-6'}`}>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter">
               {activeTab === 'stats' && 'Panel de Control'}
@@ -587,11 +587,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'notifications' && 'Historial de avisos y qué recibir en el móvil.'}
-              {activeTab === 'chat' && 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.'}
+              {activeTab === 'chat' && (isAdvisor ? 'Clientes que el asistente IA te ha pasado. Responde aquí.' : 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.')}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
             </p>
           </div>
+          {/* Conectado, avisos y ajustes del chat (los coloca ChatTab). */}
+          {activeTab === 'chat' && <div id="chat-header-actions" className="flex flex-wrap items-center gap-2" />}
           {activeTab === 'products' && (
             <button
               onClick={() => {
