@@ -8,6 +8,9 @@ import { OrderBuilder, type DraftLine, type OrderPreview } from '../chat/OrderBu
 import { ChatSales } from '../chat/ChatSales';
 import { MyCommissions } from '../chat/MyCommissions';
 import { AgentsManager } from '../chat/AgentsManager';
+import { QuickReplyPicker, QuickRepliesManager, useQuickReplies, fillReply } from '../chat/QuickReplies';
+import { CustomerProfile } from '../chat/CustomerProfile';
+import { ChatStats } from '../chat/ChatStats';
 import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications, registerServiceWorker, isIOS, isStandalonePWA } from '../../utils/pushNotificationManager';
 
 /**
@@ -58,6 +61,13 @@ interface ConversationDetail {
   agent_user_id: number | null;
   agent_name: string | null;
   customerOnline: boolean;
+  customerTyping?: boolean;
+  /** Último mensaje que ha visto el cliente («visto»). */
+  customerReadId?: number;
+  offline?: boolean;
+  summary?: string | null;
+  rating?: number | null;
+  rating_comment?: string | null;
   customer: { name: string; email: string } | null;
   orders: { id: number; status: string; total: number; created_at: string }[];
   garage: { brand: string; model: string; year: number | null }[];
@@ -144,8 +154,16 @@ const MessageBody: React.FC<{ m: Message; onOpenImage?: (url: string) => void }>
 
 const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange, isAdvisor = false }) => {
   const { showToast } = useToast();
-  const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents'>('chats');
+  const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents' | 'stats'>('chats');
   const [myOnline, setMyOnline] = useState(false);
+  const [myPaused, setMyPaused] = useState(false);
+  const [showReplies, setShowReplies] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [transferAgents, setTransferAgents] = useState<{ id: number; name: string; available: boolean; online: boolean; paused: boolean; open_chats: number }[] | null>(null);
+  const [summaryBusy, setSummaryBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const lastTypingRef = useRef(0);
+  const { replies: quickReplies, reload: reloadReplies } = useQuickReplies(adminToken);
   const [pushReady, setPushReady] = useState<boolean | null>(null);
   // Ref: la lista se recarga en un intervalo creado al montar.
   const myUserIdRef = useRef<number | null>(null);
@@ -244,10 +262,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
         setMessages([]);
         lastIdRef.current = 0;
       } else {
-        setDetail((d) => (d ? {
-          ...d, status: data.conversation.status, customerOnline: data.conversation.customerOnline,
-          agent_user_id: data.conversation.agent_user_id, agent_name: data.conversation.agent_name,
-        } : d));
+        // En las recargas parciales no vienen cliente, pedidos ni garaje.
+        const { customer: _c, orders: _o, garage: _g, ...live } = data.conversation;
+        void _c; void _o; void _g;
+        setDetail((d) => (d ? { ...d, ...live } : d));
       }
       appendMessages(data.messages || []);
     } catch { /* se reintenta */ }
@@ -258,6 +276,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
     setDetail(null);
     setMessages([]);
     setShowProducts(false);
+    setShowReplies(false);
+    setTransferAgents(null);
     if (!selectedId) return;
     loadConversation(true);
     const id = setInterval(() => loadConversation(false), 3000);
@@ -279,6 +299,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       setStatus(data.status);
       setMyAgentName((prev) => prev || data.myAgentName || '');
       setMyOnline(!!data.myOnline);
+      if (typeof data.myPaused === 'boolean') setMyPaused(data.myPaused);
       if (data.myUserId) myUserIdRef.current = Number(data.myUserId);
     } catch { /* nada */ }
   };
@@ -306,12 +327,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   };
 
   /** Conectarse/desconectarse para atender o cambiar el nombre (cualquier asesor). */
-  const saveAgentStatus = async (patch: { online?: boolean; name?: string }) => {
+  const saveAgentStatus = async (patch: { online?: boolean; paused?: boolean; name?: string }) => {
     try {
       const res = await fetch('/api/admin/agent-status', { method: 'POST', headers, body: JSON.stringify(patch) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
       setMyOnline(!!data.myOnline);
+      if (typeof data.myPaused === 'boolean') setMyPaused(data.myPaused);
       if (data.myAgentName) setMyAgentName(data.myAgentName);
       if (data.status) setStatus(data.status);
       if (patch.name !== undefined) showToast('Nombre guardado');
@@ -373,6 +395,55 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
     setDetail((d) => (d && d.status === 'waiting' ? { ...d, status: 'open' } : d));
     loadList();
     return true;
+  };
+
+  const openTransfer = async () => {
+    try {
+      const res = await fetch('/api/admin/chat-agents-available', { headers: authOnly });
+      const d = await res.json();
+      setTransferAgents(d.agents || []);
+    } catch { setTransferAgents([]); }
+  };
+
+  const transfer = async (toUserId: number | null) => {
+    if (!selectedId) return;
+    const res = await fetch(`/api/admin/chats/${selectedId}/transfer`, { method: 'POST', headers, body: JSON.stringify({ toUserId }) });
+    const d = await res.json().catch(() => ({}));
+    setTransferAgents(null);
+    if (!res.ok) { showToast(d.error || 'No se pudo transferir', 'error'); return; }
+    showToast(toUserId ? 'Conversación transferida' : 'Devuelta a la cola');
+    await loadConversation(true);
+    loadList();
+  };
+
+  const regenerateSummary = async () => {
+    if (!selectedId) return;
+    setSummaryBusy(true);
+    try {
+      const res = await fetch(`/api/admin/chats/${selectedId}/summary`, { method: 'POST', headers: authOnly });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      setDetail((x) => (x ? { ...x, summary: d.summary } : x));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo resumir', 'error');
+    } finally {
+      setSummaryBusy(false);
+    }
+  };
+
+  const suggestReply = async () => {
+    if (!selectedId) return;
+    setSuggesting(true);
+    try {
+      const res = await fetch(`/api/admin/chats/${selectedId}/suggest`, { method: 'POST', headers: authOnly });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      setReply(d.suggestion);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo sugerir', 'error');
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   const send = async (text: string) => {
@@ -462,12 +533,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
         <>
           <button
             onClick={() => saveAgentStatus({ online: !myOnline })}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono uppercase font-bold ${myOnline ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono uppercase font-bold ${myOnline ? (myPaused ? 'border-amber-400/50 bg-amber-500/10 text-amber-300' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400') : 'border-tech-border text-tech-muted hover:text-tech-text'}`}
             title={`${status?.available ? 'La IA ofrece hablar con un asesor' : status?.inHours ? 'Nadie conectado: la IA da el email y el horario' : 'Fuera de horario: la IA da el horario y el email'}\nHorario: ${status?.hoursText || '…'}${!status?.inHours && status?.nextOpen ? ` · Abre ${status.nextOpen}` : ''}\nAsesores conectados: ${status?.onlineAgents ?? 0}\n\n${myOnline ? 'Pulsa para dejar de recibir clientes' : 'Pulsa para empezar a atender'}`}
           >
-            <span className={`w-2.5 h-2.5 rounded-full ${myOnline ? 'bg-emerald-500' : 'bg-slate-500'}`} />
-            {myOnline ? 'Conectado' : 'Desconectado'}
+            <span className={`w-2.5 h-2.5 rounded-full ${myOnline ? (myPaused ? 'bg-amber-400' : 'bg-emerald-500') : 'bg-slate-500'}`} />
+            {myOnline ? (myPaused ? 'En pausa' : 'Conectado') : 'Desconectado'}
           </button>
+          {myOnline && (
+            <button onClick={() => saveAgentStatus({ paused: !myPaused })}
+              title={myPaused ? 'Volver a recibir clientes nuevos' : 'Seguir con tu chat sin recibir clientes nuevos'}
+              className={`flex items-center gap-1 text-[10px] font-mono uppercase border rounded-lg px-2.5 py-2 ${myPaused ? 'border-amber-400/50 text-amber-300' : 'border-tech-border text-tech-muted hover:text-tech-text'}`}>
+              {myPaused ? <Icons.Play size={13} /> : <Icons.Pause size={13} />} {myPaused ? 'Reanudar' : 'Pausa'}
+            </button>
+          )}
           {pushReady === false && (
             <button onClick={enablePush} className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-yellow border border-tech-yellow/40 rounded-lg px-2.5 py-2">
               <Icons.BellRing size={14} /> Activar avisos
@@ -549,6 +627,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           </div>
         )}
 
+        {showSettings && (
+          <div className="mt-4 pt-4 border-t border-tech-border">
+            <QuickRepliesManager adminToken={adminToken} isAdmin={!isAdvisor} replies={quickReplies} reload={reloadReplies} showToast={showToast} />
+          </div>
+        )}
+
         {showSettings && isAdvisor && (
           <div className="mt-4 pt-4 border-t border-tech-border flex flex-wrap items-end gap-2">
             <label className="block text-[11px] text-tech-muted flex-1 min-w-[200px]">
@@ -619,7 +703,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       <div className="flex gap-2 text-[10px] font-mono uppercase">
         {([
           ['chats', 'Conversaciones', Icons.MessagesSquare],
-          ...(isAdvisor ? [] : [['sales', 'Ventas del chat', Icons.BadgeEuro], ['agents', 'Asesores', Icons.Users]] as const),
+          ...(isAdvisor ? [] : [['sales', 'Ventas del chat', Icons.BadgeEuro], ['stats', 'Estadísticas', Icons.BarChart3], ['agents', 'Asesores', Icons.Users]] as const),
           ['commissions', 'Mis comisiones', Icons.Wallet],
         ] as const).map(([v, label, Icon]) => (
           <button key={v} onClick={() => setView(v)}
@@ -630,6 +714,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       </div>
 
       {view === 'agents' && !isAdvisor && <AgentsManager adminToken={adminToken} showToast={showToast} />}
+
+      {view === 'stats' && !isAdvisor && <ChatStats adminToken={adminToken} />}
 
       {view === 'sales' && !isAdvisor && (
         <ChatSales adminToken={adminToken} onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
@@ -694,6 +780,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                         <span className="text-[10px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />en el chat</span>
                       )}
                       {detail?.agent_name && <span className="text-[10px] text-tech-muted">Atiende: {detail.agent_name}</span>}
+                      {detail?.offline && <span className="text-[9px] font-mono uppercase text-sky-400 border border-sky-500/40 rounded px-1">📩 mensaje fuera de horario</span>}
+                      {detail?.rating != null && (
+                        <span className="text-[11px] text-tech-yellow" title={detail.rating_comment || undefined}>
+                          {'★'.repeat(detail.rating)}<span className="text-tech-muted">{'★'.repeat(5 - detail.rating)}</span>
+                        </span>
+                      )}
                     </div>
                     {detail?.customer?.email && <a href={`mailto:${detail.customer.email}`} className="text-[11px] text-tech-muted hover:text-tech-yellow">{detail.customer.email}</a>}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-[10px] text-tech-muted">
@@ -703,7 +795,35 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                         : detail ? <span>Sin pedidos</span> : null}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-end gap-2 relative">
+                    <button onClick={() => setShowProfile(true)} title="Conversaciones anteriores, pedidos y notas internas"
+                      className="text-[10px] font-mono uppercase text-tech-muted hover:text-tech-yellow border border-tech-border rounded-lg px-2 py-1.5 flex items-center gap-1">
+                      <Icons.UserRound size={12} /> Ficha
+                    </button>
+                    {active && !unassigned && (
+                      <button onClick={openTransfer} title="Pasar a otro asesor o devolver a la cola"
+                        className="text-[10px] font-mono uppercase text-tech-muted hover:text-tech-yellow border border-tech-border rounded-lg px-2 py-1.5 flex items-center gap-1">
+                        <Icons.ArrowRightLeft size={12} /> Transferir
+                      </button>
+                    )}
+                    {transferAgents && (
+                      <div className="absolute right-0 top-9 z-20 w-64 bg-tech-card border border-tech-border rounded-lg shadow-xl p-2 space-y-1">
+                        <p className="text-[10px] font-mono uppercase text-tech-muted px-1">Pasar a…</p>
+                        {transferAgents.length === 0 && <p className="text-[11px] text-tech-muted px-1">No hay más asesores.</p>}
+                        {transferAgents.map((a) => (
+                          <button key={a.id} disabled={!a.available} onClick={() => transfer(a.id)}
+                            className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-[#1a1b1e] disabled:opacity-40 flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${a.available ? 'bg-emerald-500' : a.online ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                            <span className="flex-1 text-tech-text">{a.name}</span>
+                            <span className="text-[9px] text-tech-muted">{a.available ? 'libre' : !a.online ? 'desconectado' : a.paused ? 'en pausa' : 'ocupado'}</span>
+                          </button>
+                        ))}
+                        <button onClick={() => transfer(null)} className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-[#1a1b1e] text-tech-yellow border-t border-tech-border mt-1">
+                          Devolver a la cola
+                        </button>
+                        <button onClick={() => setTransferAgents(null)} className="w-full text-[10px] text-tech-muted pt-1">Cancelar</button>
+                      </div>
+                    )}
                     {unassigned && (
                       <button onClick={take} disabled={busyElsewhere} title={busyElsewhere ? 'Ya estás atendiendo otro chat' : undefined}
                         className="bg-tech-yellow text-black text-[10px] font-bold font-mono uppercase rounded-lg px-3 py-1.5 disabled:opacity-40">Atender</button>
@@ -713,6 +833,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                     )}
                   </div>
                 </div>
+
+                {detail && (detail.summary || active) && (
+                  <div className="flex items-start gap-2 px-4 py-2 border-b border-tech-border bg-sky-500/5 text-xs">
+                    <Icons.Sparkles size={14} className="text-sky-400 mt-0.5 shrink-0" />
+                    {detail.summary
+                      ? <p className="flex-1 text-tech-text whitespace-pre-wrap"><b className="text-sky-300">Resumen IA: </b>{detail.summary}</p>
+                      : <p className="flex-1 text-tech-muted">Sin resumen todavía.</p>}
+                    <button onClick={regenerateSummary} disabled={summaryBusy} className="text-[10px] font-mono uppercase text-sky-300 hover:underline shrink-0 disabled:opacity-50">
+                      {summaryBusy ? 'Resumiendo…' : detail.summary ? 'Actualizar' : 'Resumir'}
+                    </button>
+                  </div>
+                )}
 
                 {(draft.length > 0 || detail?.chatOrders?.length) ? (
                   <button
@@ -765,6 +897,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                       </div>
                     )
                   ))}
+                  {(() => {
+                    // «Visto» bajo tu último mensaje cuando el cliente lo ha leído.
+                    const lastMine = [...messages].reverse().find((m) => m.sender === 'agent');
+                    return lastMine && (detail?.customerReadId || 0) >= lastMine.id
+                      ? <p className="text-[10px] text-right text-tech-muted -mt-1.5">Visto</p> : null;
+                  })()}
+                  {detail?.customerTyping && active && <p className="text-[11px] text-tech-muted italic">El cliente está escribiendo…</p>}
                   {uploading && <p className="text-[11px] text-right text-tech-muted">Subiendo imagen…</p>}
                 </div>
 
@@ -776,6 +915,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   </div>
                 ) : active ? (
                   <div className="p-3 border-t border-tech-border space-y-2">
+                    {showReplies && (
+                      <QuickReplyPicker replies={quickReplies} onClose={() => setShowReplies(false)} onPick={(r) => {
+                        const text = fillReply(r.body, {
+                          cliente: detail?.customer?.name && !detail.customer.name.includes('@') ? detail.customer.name.split(' ')[0] : '',
+                          moto: detail?.garage?.[0] ? `${detail.garage[0].brand} ${detail.garage[0].model}` : '',
+                          asesor: myAgentName,
+                        });
+                        setReply((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+                        setShowReplies(false);
+                      }} />
+                    )}
                     {showProducts && (
                       <div className="bg-tech-carbon border border-tech-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
@@ -798,13 +948,28 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                         className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-muted hover:text-tech-yellow border border-tech-border rounded-lg px-2.5 py-1.5">
                         <Icons.ShoppingCart size={14} /> Carrito y pedido
                       </button>
+                      <button onClick={() => setShowReplies((v) => !v)} title="Respuestas rápidas"
+                        className={`flex items-center gap-1 text-[10px] font-mono uppercase border rounded-lg px-2.5 py-1.5 ${showReplies ? 'border-tech-yellow text-tech-yellow' : 'border-tech-border text-tech-muted hover:text-tech-yellow'}`}>
+                        <Icons.Zap size={14} /> Respuestas
+                      </button>
+                      <button onClick={suggestReply} disabled={suggesting} title="La IA propone una respuesta (la revisas antes de enviarla)"
+                        className="flex items-center gap-1 text-[10px] font-mono uppercase text-tech-muted hover:text-sky-300 border border-tech-border rounded-lg px-2.5 py-1.5 disabled:opacity-50">
+                        <Icons.Sparkles size={14} /> {suggesting ? 'Pensando…' : 'Sugerir'}
+                      </button>
                       <input ref={fileRef} type="file" accept="image/*" className="hidden"
                         onChange={(e) => { const f = e.target.files?.[0]; if (f) sendImage(f); e.target.value = ''; }} />
                     </div>
                     <div className="flex gap-2">
                       <textarea
                         value={reply}
-                        onChange={(e) => setReply(e.target.value)}
+                        onChange={(e) => {
+                          setReply(e.target.value);
+                          // «Escribiendo…» para el cliente, como mucho cada 3 s.
+                          if (selectedId && Date.now() - lastTypingRef.current > 3000) {
+                            lastTypingRef.current = Date.now();
+                            fetch(`/api/admin/chats/${selectedId}/typing`, { method: 'POST', headers: authOnly }).catch(() => {});
+                          }
+                        }}
                         onPaste={onPaste}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(reply); } }}
                         placeholder={unassigned ? 'Escribe para atender (se enviará antes tu bienvenida)…' : 'Escribe tu respuesta… (Intro envía, Mayús+Intro salto de línea, Ctrl+V pega imágenes)'}
@@ -834,6 +999,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
           <img src={lightbox} alt="Imagen ampliada" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
           <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 text-white/80 hover:text-white" aria-label="Cerrar"><Icons.X size={28} /></button>
         </div>
+      )}
+
+      {showProfile && selectedId && (
+        <CustomerProfile adminToken={adminToken} conversationId={selectedId} showToast={showToast}
+          onClose={() => setShowProfile(false)}
+          onOpenConversation={(id) => { setShowProfile(false); setScope('closed'); setSelectedId(id); }} />
       )}
 
       {showOrder && selectedId && detail && (
