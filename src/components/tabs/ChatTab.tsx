@@ -33,6 +33,7 @@ interface ConversationItem {
   updated_at: string;
   closed_by: string | null;
   agent_name: string | null;
+  agent_user_id?: number | null;
   user_id: number;
   name: string | null;
   email: string | null;
@@ -146,6 +147,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents'>('chats');
   const [myOnline, setMyOnline] = useState(false);
   const [pushReady, setPushReady] = useState<boolean | null>(null);
+  // Ref: la lista se recarga en un intervalo creado al montar.
+  const myUserIdRef = useRef<number | null>(null);
+  // Chat que atiende el asesor ahora (solo uno a la vez).
+  const [myOpenChat, setMyOpenChat] = useState<ConversationItem | null>(null);
   const [showIosHelp, setShowIosHelp] = useState(false);
   // Hueco en la cabecera de la página para Conectado / avisos / ajustes.
   const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
@@ -205,6 +210,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       const data = await res.json();
       setList(data.conversations || []);
       if (scope === 'open') {
+        setMyOpenChat((data.conversations || []).find((c: ConversationItem) => myUserIdRef.current != null && Number(c.agent_user_id) === myUserIdRef.current && c.status !== 'closed') || null);
         onSummaryChange?.((data.conversations || []).filter((c: ConversationItem) => c.status === 'waiting' || c.unread > 0).length);
       }
     } catch { /* se reintenta */ } finally {
@@ -273,6 +279,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       setStatus(data.status);
       setMyAgentName((prev) => prev || data.myAgentName || '');
       setMyOnline(!!data.myOnline);
+      if (data.myUserId) myUserIdRef.current = Number(data.myUserId);
     } catch { /* nada */ }
   };
 
@@ -444,6 +451,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
 
   const active = !!detail && detail.status !== 'closed';
   const unassigned = active && !detail?.agent_user_id;
+  // Un asesor solo atiende un chat a la vez: con otro abierto no puede coger este.
+  const busyElsewhere = isAdvisor && unassigned && !!myOpenChat && myOpenChat.id !== selectedId;
 
   return (
     <div className={view === 'chats' ? 'flex flex-col gap-3 md:h-[calc(100vh-9.5rem)]' : 'space-y-4'}>
@@ -696,7 +705,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   </div>
                   <div className="flex gap-2">
                     {unassigned && (
-                      <button onClick={take} className="bg-tech-yellow text-black text-[10px] font-bold font-mono uppercase rounded-lg px-3 py-1.5">Atender</button>
+                      <button onClick={take} disabled={busyElsewhere} title={busyElsewhere ? 'Ya estás atendiendo otro chat' : undefined}
+                        className="bg-tech-yellow text-black text-[10px] font-bold font-mono uppercase rounded-lg px-3 py-1.5 disabled:opacity-40">Atender</button>
                     )}
                     {active && (
                       <button onClick={closeConversation} className="text-[10px] font-mono uppercase text-tech-muted hover:text-red-400 border border-tech-border rounded-lg px-2 py-1.5">Cerrar</button>
@@ -758,7 +768,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
                   {uploading && <p className="text-[11px] text-right text-tech-muted">Subiendo imagen…</p>}
                 </div>
 
-                {active ? (
+                {busyElsewhere ? (
+                  <div className="p-3 border-t border-tech-border text-xs text-amber-300 bg-amber-500/5 flex flex-wrap items-center gap-2">
+                    <Icons.Lock size={14} />
+                    <span className="flex-1">Ya estás atendiendo un chat{myOpenChat?.name ? ` con ${myOpenChat.name}` : ''}: ciérralo para coger este.</span>
+                    <button onClick={() => setSelectedId(myOpenChat!.id)} className="text-[10px] font-mono uppercase text-tech-yellow hover:underline">Ir a mi chat</button>
+                  </div>
+                ) : active ? (
                   <div className="p-3 border-t border-tech-border space-y-2">
                     {showProducts && (
                       <div className="bg-tech-carbon border border-tech-border rounded-lg p-3">
