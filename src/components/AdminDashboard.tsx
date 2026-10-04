@@ -57,7 +57,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [carts, setCarts] = useState<Cart[]>([]);
   const [cartsSubTab, setCartsSubTab] = useState<'current' | 'abandoned'>('current');
   const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Los asesores no cargan pedidos, usuarios ni carritos: sin pantalla de carga.
+  const [loading, setLoading] = useState(!isAdvisor);
   const [error, setError] = useState<string | null>(null);
 
   // Products Search & Pagination
