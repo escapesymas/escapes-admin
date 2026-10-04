@@ -5,7 +5,10 @@ import { AcceptInvitation } from './components/AcceptInvitation';
 
 // El mismo panel sirve a los asesores en asesores.escapesymas.com (solo el chat).
 const ADVISORS_HOST = typeof window !== 'undefined' && window.location.hostname.startsWith('asesores.');
-const INVITATION = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invitacion') : null;
+// Enlace de invitación de asesor: /invitacion/<token> (o ?invitacion=<token>, enlaces antiguos).
+const INVITATION = typeof window !== 'undefined'
+  ? (window.location.pathname.match(/^\/invitacion\/([a-f0-9]{64})\/?$/)?.[1] || new URLSearchParams(window.location.search).get('invitacion'))
+  : null;
 if (ADVISORS_HOST) document.title = 'Escapes y Más · Asesores';
 import { Shield, Key, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -16,6 +19,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invitationDone, setInvitationDone] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('escapesymas_admin_session');
@@ -84,11 +88,20 @@ export default function App() {
     );
   }
 
-  if (INVITATION && !session) {
+  // La invitación manda aunque haya una sesión abierta en este navegador (al
+  // aceptarla se sustituye): antes se ignoraba y se veía el panel sin más.
+  if (INVITATION && !invitationDone) {
     return (
       <AcceptInvitation
         token={INVITATION}
-        onDone={(sess) => { localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess)); setSession(sess); }}
+        currentEmail={session?.user_email || session?.user?.email || null}
+        onDone={(sess) => {
+          localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess));
+          window.history.replaceState({}, '', '/');
+          setSession(sess);
+          setInvitationDone(true);
+        }}
+        onSkip={session ? () => { window.history.replaceState({}, '', '/'); setInvitationDone(true); } : undefined}
       />
     );
   }

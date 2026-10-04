@@ -8,9 +8,13 @@ import { UserPlus, AlertCircle, Loader2 } from 'lucide-react';
 interface AcceptInvitationProps {
   token: string;
   onDone: (session: any) => void;
+  /** Email de la sesión ya abierta en este navegador (se sustituye al aceptar). */
+  currentEmail?: string | null;
+  /** Volver al panel sin aceptar (si hay sesión abierta). */
+  onSkip?: () => void;
 }
 
-export const AcceptInvitation: React.FC<AcceptInvitationProps> = ({ token, onDone }) => {
+export const AcceptInvitation: React.FC<AcceptInvitationProps> = ({ token, onDone, currentEmail, onSkip }) => {
   const [info, setInfo] = useState<{ email: string; name: string | null; existingAccount: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [firstName, setFirstName] = useState('');
@@ -43,7 +47,6 @@ export const AcceptInvitation: React.FC<AcceptInvitationProps> = ({ token, onDon
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'No se pudo completar el alta');
-      window.history.replaceState({}, '', window.location.pathname);
       onDone({ token: d.token, user_id: d.user.id, user_email: d.user.email, user: d.user, role: d.user.role });
     } catch (err: any) {
       setError(err.message);
@@ -76,6 +79,11 @@ export const AcceptInvitation: React.FC<AcceptInvitationProps> = ({ token, onDon
         {info && (
           <form onSubmit={submit} className="space-y-4">
             <p className="text-sm text-tech-text">Invitación para <b>{info.email}</b></p>
+            {currentEmail && currentEmail.toLowerCase() !== info.email.toLowerCase() && (
+              <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                En este navegador tienes abierta la sesión de {currentEmail}. Al aceptar, se cerrará y entrarás como {info.email}.
+              </p>
+            )}
             {info.existingAccount ? (
               <>
                 <p className="text-xs text-tech-muted">Ya tienes cuenta en la tienda: escribe tu contraseña para activar el acceso de asesor.</p>
@@ -96,6 +104,11 @@ export const AcceptInvitation: React.FC<AcceptInvitationProps> = ({ token, onDon
               {sending ? 'Activando…' : info.existingAccount ? 'Activar acceso de asesor' : 'Crear mi acceso'}
             </button>
           </form>
+        )}
+        {onSkip && (
+          <button type="button" onClick={onSkip} className="mt-4 w-full text-[11px] text-tech-muted hover:text-tech-text underline">
+            Volver al panel sin aceptar
+          </button>
         )}
       </div>
     </div>
