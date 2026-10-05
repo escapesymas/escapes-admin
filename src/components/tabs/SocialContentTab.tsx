@@ -583,7 +583,7 @@ const BrandLogos: React.FC<{ adminToken: string; onClose: () => void }> = ({ adm
             </div>
             <span className="flex-1 min-w-0">
               <span className="block text-xs font-bold text-tech-text truncate">{b.brand}</span>
-              <span className={`block text-[10px] ${b.url ? 'text-emerald-400' : 'text-amber-400'}`}>{b.url ? 'Logo subido' : 'Falta el logo'}</span>
+              <span className={`block text-[10px] ${b.url ? 'text-emerald-400' : 'text-amber-400'}`}>{b.url ? 'Logo subido' : 'Sin logo: sale su nombre'}</span>
             </span>
             <button onClick={() => pick(b.brand)} disabled={busy === b.brand} className="text-tech-yellow hover:text-orange-400 disabled:opacity-50" aria-label="Subir logo">
               {busy === b.brand ? <Icons.Loader2 size={15} className="animate-spin" /> : <Icons.Upload size={15} />}
