@@ -411,7 +411,7 @@ const SlotEditor: React.FC<{
           ) : (
             <>
               {!generating && <ProductSearch adminToken={adminToken} onPick={(p) => setProduct({ sku: p.sku, name: p.name, image: p.image })} />}
-              <p className="text-[10px] text-tech-muted mt-1">Si no eliges ninguno, la IA usa un producto con stock de IXIL, BELL o RST que no se haya publicado en los últimos 60 días.</p>
+              <p className="text-[10px] text-tech-muted mt-1">Si no eliges ninguno, se sortea una marca (de todas, sin repetir las de las últimas 10 publicaciones) y un producto suyo con stock, fotos y de 30 € o más que no se haya publicado en 120 días.</p>
             </>
           )}
         </div>
@@ -569,7 +569,7 @@ const BrandLogos: React.FC<{ adminToken: string; onClose: () => void }> = ({ adm
         <button onClick={onClose} className="text-tech-muted hover:text-tech-text" aria-label="Cerrar"><Icons.X size={16} /></button>
       </div>
       <p className="text-[11px] text-tech-muted">
-        Se ponen en las imágenes promocionales junto al logo de escapesymas.com. Mejor en PNG con fondo transparente o SVG,
+        Salen las marcas de las publicaciones del calendario. Se ponen en las imágenes promocionales junto al logo de escapesymas.com. Mejor en PNG con fondo transparente o SVG,
         descargado de la web oficial o del material de prensa de la marca.
       </p>
       <input ref={fileRef} type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" className="hidden"
@@ -783,7 +783,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
                         {slot.error && slot.status === 'draft' && <Icons.AlertTriangle size={12} className="text-red-400" />}
                       </div>
                       <p className="text-xs text-tech-muted truncate mt-0.5">
-                        {slot.product_name || slot.topic || 'Producto automático (IXIL, BELL o RST)'}
+                        {slot.product_name || slot.topic || 'Producto automático (cualquier marca)'}
                       </p>
                     </div>
                   </div>
