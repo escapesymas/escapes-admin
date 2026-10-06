@@ -21,6 +21,8 @@ interface ContentSlot {
   video_prompt?: string | null;
   final_media?: { url: string; type: 'image' | 'video'; name: string; original?: string }[];
   base_media?: string[];
+  campaign?: boolean;
+  slides?: { title: string; text: string; scene: string }[];
   video_status?: 'generating' | 'done' | 'error' | null;
   video_error?: string | null;
   status: 'draft' | 'generating' | 'ready' | 'published' | 'skipped';
@@ -213,8 +215,10 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
 };
 
 const VIDEO_OPTIONS = [
-  { id: 'fast', label: 'Veo 3.1 Fast · mejor calidad', cost: '≈ 1,10 €' },
-  { id: 'lite', label: 'Veo 3.1 Lite · más barato', cost: '≈ 0,40 €' },
+  { id: 'hailuo', label: 'Hailuo 2.3 (MiniMax) · 6 s en 1080p, sin sonido', cost: 'incluido en tu plan de MiniMax', seconds: 6 },
+  { id: 'hailuo-fast', label: 'Hailuo 2.3 Fast (MiniMax) · más rápido, sin sonido', cost: 'incluido en tu plan de MiniMax', seconds: 6 },
+  { id: 'fast', label: 'Veo 3.1 Fast (Google) · 8 s con sonido', cost: '≈ 1,10 € de los créditos de Google Cloud', seconds: 8 },
+  { id: 'lite', label: 'Veo 3.1 Lite (Google) · 8 s con sonido', cost: '≈ 0,40 € de los créditos de Google Cloud', seconds: 8 },
 ];
 
 /**
@@ -228,15 +232,15 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
   const sources = Array.from(new Set([...(slot.base_media || []), slot.product_image || ''].filter(Boolean)));
   const [source, setSource] = useState(sources[0] || '');
   const [prompt, setPrompt] = useState(slot.video_prompt || fallbackPrompts(slot).video);
-  const [model, setModel] = useState('fast');
+  const [model, setModel] = useState('hailuo');
+  const opt = VIDEO_OPTIONS.find((o) => o.id === model) || VIDEO_OPTIONS[0];
   const [busy, setBusy] = useState(false);
   const generating = slot.video_status === 'generating';
 
   useEffect(() => { if (!source && sources[0]) setSource(sources[0]); }, [sources, source]);
 
   const start = async () => {
-    const opt = VIDEO_OPTIONS.find((o) => o.id === model)!;
-    if (!window.confirm(`Generar un vídeo de 8 s con ${opt.label.split(' · ')[0]} (${opt.cost} de tus créditos de Google Cloud)?`)) return;
+    if (!window.confirm(`¿Generar un vídeo de ${opt.seconds} s con ${opt.label.split(' · ')[0]}? Coste: ${opt.cost}.`)) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/social-content/${slot.id}/video`, {
@@ -257,7 +261,7 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
   if (!sources.length) return null;
   return (
     <div className="border border-purple-500/30 bg-purple-500/5 rounded-xl p-4 space-y-3">
-      <p className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5"><Icons.Clapperboard size={14} /> Vídeo con IA (Veo)</p>
+      <p className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5"><Icons.Clapperboard size={14} /> Vídeo con IA (Hailuo o Veo)</p>
       {slot.video_status === 'error' && slot.video_error && (
         <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.video_error}</div>
       )}
@@ -282,15 +286,64 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             <select value={model} onChange={(e) => setModel(e.target.value)} className={`${inputClass} w-auto`}>
-              {VIDEO_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label} ({o.cost})</option>)}
+              {VIDEO_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
             <button onClick={start} disabled={busy || !source || prompt.trim().length < 10}
               className="bg-purple-500/80 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">
-              {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />} Generar vídeo de 8 s
+              {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />} Generar vídeo de {opt.seconds} s
             </button>
           </div>
-          <p className="text-[10px] text-tech-muted">Precio orientativo por vídeo, descontado de tus créditos de Google Cloud. El vídeo incluye sonido.</p>
+          <p className="text-[10px] text-tech-muted">Coste: {opt.cost}. Hailuo no lleva sonido (pon música en TikTok); Veo sí.</p>
         </>
+      )}
+    </div>
+  );
+};
+
+/** Textos de las diapositivas de una publicación de marca: se editan y se vuelven a componer (sin IA). */
+const SlidesEditor: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void }> = ({ slot, adminToken, onChanged }) => {
+  const { showToast } = useToast();
+  const [slides, setSlides] = useState(slot.slides || []);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setSlides(slot.slides || []); }, [slot.slides]);
+  const dirty = JSON.stringify(slides) !== JSON.stringify(slot.slides || []);
+  const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r1 = await fetch(`/api/social-content/${slot.id}`, { method: 'PATCH', headers, body: JSON.stringify({ slides }) });
+      if (!r1.ok) { const d = await r1.json().catch(() => ({})); showToast(d.error || 'No se pudo guardar', 'error'); return; }
+      const r2 = await fetch(`/api/social-content/${slot.id}/recompose`, { method: 'POST', headers });
+      if (!r2.ok) { showToast('Textos guardados, pero no se pudieron rehacer las imágenes', 'error'); }
+      else showToast('Diapositivas actualizadas', 'success');
+      onChanged();
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!slides.length) return null;
+  const set = (i: number, k: 'title' | 'text', v: string) => setSlides((arr) => arr.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  return (
+    <div className="space-y-2">
+      <label className={labelClass}>Texto de cada diapositiva</label>
+      {slides.map((sl, i) => (
+        <div key={i} className="flex gap-2 items-start bg-tech-carbon border border-tech-border rounded-lg p-2">
+          <span className="text-[10px] font-black text-tech-muted w-5 pt-2">{i + 1}</span>
+          <div className="flex-1 space-y-1.5">
+            <input value={sl.title} onChange={(e) => set(i, 'title', e.target.value)} maxLength={80} placeholder="Título" className={`${inputClass} font-bold`} />
+            <textarea value={sl.text} onChange={(e) => set(i, 'text', e.target.value)} maxLength={220} rows={2} placeholder="Texto" className={`${inputClass} text-xs resize-y`} />
+          </div>
+        </div>
+      ))}
+      {dirty && (
+        <button onClick={save} disabled={busy}
+          className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
+          {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Save size={13} />} Guardar textos y rehacer imágenes
+        </button>
       )}
     </div>
   );
@@ -400,7 +453,7 @@ const SlotEditor: React.FC<{
             <option value="carousel">Carrusel (hasta 4 imágenes)</option>
           </select>
         </div>
-        <div className="md:col-span-2">
+        {!slot.campaign && <div className="md:col-span-2">
           <label className={labelClass}>Producto</label>
           {product ? (
             <div className="flex items-center gap-2 bg-tech-carbon border border-tech-border rounded-lg p-2">
@@ -414,11 +467,11 @@ const SlotEditor: React.FC<{
               <p className="text-[10px] text-tech-muted mt-1">Si no eliges ninguno, se sortea una marca (de todas, sin repetir las de las últimas 10 publicaciones) y un producto suyo con stock, fotos y de 30 € o más que no se haya publicado en 120 días.</p>
             </>
           )}
-        </div>
+        </div>}
         <div className="md:col-span-2">
-          <label className={labelClass}>Enfoque (opcional)</label>
+          <label className={labelClass}>{slot.campaign ? 'Tema de la publicación de marca' : 'Enfoque (opcional)'}</label>
           <input value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={500} disabled={generating}
-            placeholder="Ej.: sonido del escape al arrancar, comparativa con el de serie, look de invierno…" className={inputClass} />
+            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: sonido del escape al arrancar, comparativa con el de serie, look de invierno…'} className={inputClass} />
         </div>
       </div>
 
@@ -445,20 +498,23 @@ const SlotEditor: React.FC<{
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className={labelClass}>Imágenes promocionales</label>
-                <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
-                  <Icons.BadgeCheck size={11} /> Rehacer con logos
-                </button>
+                {!slot.campaign && (
+                  <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
+                    <Icons.BadgeCheck size={11} /> Rehacer con logos
+                  </button>
+                )}
               </div>
               <div className="flex gap-2 flex-wrap">
                 {slot.media_urls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group">
-                    <img src={url} alt={`Imagen ${i + 1}`} className="w-28 h-28 object-cover rounded-lg border border-tech-border" />
+                    <img src={url} alt={`Imagen ${i + 1}`} className={`${slot.campaign ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
                     <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
                   </a>
                 ))}
               </div>
             </div>
           )}
+          {slot.campaign && <SlidesEditor slot={slot} adminToken={adminToken} onChanged={onChanged} />}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className={labelClass}>Texto de la publicación</label>
@@ -495,7 +551,7 @@ const SlotEditor: React.FC<{
         <VideoStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
       )}
 
-      {(hasContent || slot.product_sku) && !generating && (
+      {(hasContent || slot.product_sku) && !generating && !slot.campaign && (
         <ManualStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
       )}
 
@@ -611,6 +667,8 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   const [showLogos, setShowLogos] = useState(false);
   const [newWhen, setNewWhen] = useState('');
   const [newFormat, setNewFormat] = useState<ContentSlot['format']>('video');
+  const [newCampaign, setNewCampaign] = useState(false);
+  const [newTopic, setNewTopic] = useState('');
   const slotsRef = useRef<ContentSlot[]>([]);
 
   const authHeaders = () => ({ 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' });
@@ -684,12 +742,15 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
     if (!newWhen) return;
     try {
       const res = await fetch('/api/social-content', {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ scheduledAt: new Date(newWhen).toISOString(), format: newFormat }),
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ scheduledAt: new Date(newWhen).toISOString(), format: newFormat, campaign: newCampaign, topic: newTopic.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showToast(data.error || 'No se pudo crear', 'error'); return; }
       setShowNew(false);
       setNewWhen('');
+      setNewTopic('');
+      setNewCampaign(false);
       setExpandedId(data.slot?.id || null);
       fetchSlots(true);
     } catch {
@@ -733,7 +794,18 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
       {showLogos && <BrandLogos adminToken={adminToken} onClose={() => setShowLogos(false)} />}
 
       {showNew && (
-        <div className="bg-tech-card border border-tech-border rounded-xl p-4 flex flex-col md:flex-row gap-3 md:items-end">
+        <div className="bg-tech-card border border-tech-border rounded-xl p-4 flex flex-col md:flex-row md:flex-wrap gap-3 md:items-end">
+          <label className="w-full text-xs text-tech-text flex items-center gap-2">
+            <input type="checkbox" checked={newCampaign} onChange={(e) => { setNewCampaign(e.target.checked); if (e.target.checked) setNewFormat('carousel'); }} />
+            Publicación de marca (sin producto): p. ej. dar a conocer el chat con asesores
+          </label>
+          {newCampaign && (
+            <div className="w-full">
+              <label className={labelClass}>Tema</label>
+              <input value={newTopic} onChange={(e) => setNewTopic(e.target.value)} maxLength={500} className={inputClass}
+                placeholder="Ej.: tenemos un chat con asesores expertos humanos que te ayudan a elegir y te preparan el pedido" />
+            </div>
+          )}
           <div className="flex-1">
             <label className={labelClass}>Fecha y hora</label>
             <input type="datetime-local" value={newWhen} onChange={(e) => setNewWhen(e.target.value)} className={inputClass} />
@@ -746,7 +818,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
               <option value="carousel">Carrusel</option>
             </select>
           </div>
-          <button onClick={handleCreate} disabled={!newWhen}
+          <button onClick={handleCreate} disabled={!newWhen || (newCampaign && !newTopic.trim())}
             className="bg-tech-yellow text-tech-text px-4 py-2.5 rounded-lg text-xs font-black uppercase disabled:opacity-40">Crear</button>
         </div>
       )}
@@ -783,7 +855,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
                         {slot.error && slot.status === 'draft' && <Icons.AlertTriangle size={12} className="text-red-400" />}
                       </div>
                       <p className="text-xs text-tech-muted truncate mt-0.5">
-                        {slot.product_name || slot.topic || 'Producto automático (cualquier marca)'}
+                        {slot.campaign ? `De marca · ${slot.topic || ''}` : (slot.product_name || slot.topic || 'Producto automático (cualquier marca)')}
                       </p>
                     </div>
                   </div>
