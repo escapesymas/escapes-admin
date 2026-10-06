@@ -22,6 +22,11 @@ interface ContentSlot {
   final_media?: { url: string; type: 'image' | 'video'; name: string; original?: string }[];
   base_media?: string[];
   campaign?: boolean;
+  ig_media?: string[];
+  ig_copy?: string | null;
+  ig_hashtags?: string | null;
+  ig_status?: 'generating' | 'ready' | 'error' | null;
+  ig_error?: string | null;
   slides?: { title: string; text: string; scene: string }[];
   video_status?: 'generating' | 'done' | 'error' | null;
   video_error?: string | null;
@@ -300,6 +305,93 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
   );
 };
 
+/**
+ * Versión de Instagram: las mismas imágenes en 4:5 (1080x1350) y la descripción
+ * adaptada. Los vídeos de TikTok sirven tal cual para Reels.
+ */
+const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void }> = ({ slot, adminToken, onChanged }) => {
+  const { showToast } = useToast();
+  const [copy, setCopy] = useState(slot.ig_copy || '');
+  const [hashtags, setHashtags] = useState(slot.ig_hashtags || '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setCopy(slot.ig_copy || ''); setHashtags(slot.ig_hashtags || ''); }, [slot.ig_copy, slot.ig_hashtags]);
+  const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+  const generating = slot.ig_status === 'generating';
+  const has = !!slot.ig_media?.length;
+  const dirty = copy !== (slot.ig_copy || '') || hashtags !== (slot.ig_hashtags || '');
+
+  const create = async (caption: boolean) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/social-content/${slot.id}/instagram`, { method: 'POST', headers, body: JSON.stringify({ caption }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(d.error || 'No se pudo crear la versión de Instagram', 'error'); return; }
+      showToast('Preparando la versión de Instagram…', 'success');
+      onChanged();
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveText = async () => {
+    const res = await fetch(`/api/social-content/${slot.id}`, { method: 'PATCH', headers, body: JSON.stringify({ igCopy: copy, igHashtags: hashtags }) });
+    if (res.ok) { showToast('Texto de Instagram guardado', 'success'); onChanged(); } else showToast('No se pudo guardar', 'error');
+  };
+
+  return (
+    <div className="border border-pink-500/30 bg-pink-500/5 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="flex-1 text-xs font-black uppercase tracking-wider text-pink-300 flex items-center gap-1.5"><Icons.Instagram size={14} /> Versión Instagram (4:5)</p>
+        {has && !generating && (
+          <>
+            <button onClick={() => create(false)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.RefreshCw size={11} /> Rehacer imágenes</button>
+            <button onClick={() => create(true)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.Sparkles size={11} /> Rehacer todo</button>
+          </>
+        )}
+      </div>
+      {slot.ig_status === 'error' && slot.ig_error && <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.ig_error}</div>}
+      {generating ? (
+        <p className="text-xs text-pink-200 flex items-center gap-2"><Icons.Loader2 className="w-4 h-4 animate-spin" /> Adaptando imágenes y texto… (unos segundos)</p>
+      ) : !has ? (
+        <>
+          <p className="text-[11px] text-tech-muted">Crea las mismas imágenes en el formato del feed de Instagram (1080×1350) y un texto adaptado, con «enlace en la bio» y más hashtags. Los vídeos sirven tal cual para Reels.</p>
+          <button onClick={() => create(true)} disabled={busy}
+            className="bg-pink-500/80 hover:bg-pink-500 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">
+            {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Instagram size={14} />} Crear versión Instagram
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="flex gap-2 flex-wrap">
+            {slot.ig_media!.map((url, i) => (
+              <a key={url} href={url} target="_blank" rel="noreferrer" download className="relative group">
+                <img src={url} alt={`Instagram ${i + 1}`} className="w-24 h-[7.5rem] object-cover rounded-lg border border-tech-border" />
+                <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
+              </a>
+            ))}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelClass}>Texto para Instagram</label>
+              <button onClick={() => { navigator.clipboard?.writeText(`${copy}\n\n${hashtags}`.trim()); showToast('Copiado al portapapeles', 'success'); }}
+                className="text-pink-300 text-[10px] font-bold flex items-center gap-1"><Icons.Copy size={11} /> Copiar texto + hashtags</button>
+            </div>
+            <textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={5} maxLength={2200} className={`${inputClass} resize-y`} />
+          </div>
+          <input value={hashtags} onChange={(e) => setHashtags(e.target.value)} maxLength={600} className={`${inputClass} text-pink-300 text-xs`} />
+          {dirty && (
+            <button onClick={saveText} className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2">
+              <Icons.Save size={13} /> Guardar texto
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 /** Textos de las diapositivas de una publicación de marca: se editan y se vuelven a componer (sin IA). */
 const SlidesEditor: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void }> = ({ slot, adminToken, onChanged }) => {
   const { showToast } = useToast();
@@ -547,6 +639,10 @@ const SlotEditor: React.FC<{
         </div>
       )}
 
+      {hasContent && !generating && (
+        <InstagramStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+      )}
+
       {(hasContent || slot.product_sku) && !generating && (
         <VideoStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
       )}
@@ -697,7 +793,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
   // Mientras algo se está generando, se consulta cada 4 s hasta que termine.
-  const anyGenerating = slots.some((s) => s.status === 'generating' || s.video_status === 'generating');
+  const anyGenerating = slots.some((s) => s.status === 'generating' || s.video_status === 'generating' || s.ig_status === 'generating');
   useEffect(() => {
     if (!anyGenerating) return;
     const t = setInterval(() => {
