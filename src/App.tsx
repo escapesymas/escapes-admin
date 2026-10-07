@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ToastProvider } from './components/ToastContext';
 import { AcceptInvitation } from './components/AcceptInvitation';
+import { MfaGate } from './components/security/MfaGate';
+import { mfaStatus, MfaMethods } from './components/security/mfaApi';
 
 // El mismo panel sirve a los asesores en asesores.escapesymas.com (solo el chat).
 const ADVISORS_HOST = typeof window !== 'undefined' && window.location.hostname.startsWith('asesores.');
@@ -27,17 +29,30 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invitationDone, setInvitationDone] = useState(false);
+  // Segundo paso pendiente (Face ID / Authenticator): la sesión aún no da acceso al panel.
+  const [gate, setGate] = useState<{ base: any; setupRequired: boolean; methods: MfaMethods } | null>(null);
+
+  /** Abre el panel solo si la sesión ya tiene hecho el segundo paso; si no, lo pide. */
+  const enter = async (sess: any) => {
+    try {
+      const st = await mfaStatus(sess.token);
+      if (st.pending) { setGate({ base: sess, setupRequired: st.setupRequired, methods: st.methods }); return; }
+      localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess));
+      setSession(sess);
+    } catch (e: any) {
+      localStorage.removeItem('escapesymas_admin_session');
+      setSession(null);
+      if (e?.status !== 401 && e?.status !== 403) setError('No se pudo comprobar la sesión. Vuelve a entrar.');
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('escapesymas_admin_session');
-    if (saved) {
-      try {
-        setSession(JSON.parse(saved));
-      } catch (e) {
-        localStorage.removeItem('escapesymas_admin_session');
-      }
-    }
-    setLoading(false);
+    let parsed: any = null;
+    try { parsed = saved ? JSON.parse(saved) : null; } catch { localStorage.removeItem('escapesymas_admin_session'); }
+    if (!parsed?.token) { setLoading(false); return; }
+    enter(parsed).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -72,8 +87,11 @@ export default function App() {
         role,
       };
 
-      localStorage.setItem('escapesymas_admin_session', JSON.stringify(safeSession));
-      setSession(safeSession);
+      if (data.mfa?.required) {
+        setGate({ base: safeSession, setupRequired: !!data.mfa.setupRequired, methods: data.mfa.methods });
+        return;
+      }
+      await enter(safeSession);
     } catch (err: any) {
       setError(err.message || 'Error de conexión con el VPS');
     } finally {
@@ -84,6 +102,7 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('escapesymas_admin_session');
     setSession(null);
+    setGate(null);
   };
 
   if (loading) {
@@ -103,12 +122,29 @@ export default function App() {
         token={INVITATION}
         currentEmail={session?.user_email || session?.user?.email || null}
         onDone={(sess) => {
-          localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess));
           window.history.replaceState({}, '', '/');
-          setSession(sess);
           setInvitationDone(true);
+          enter(sess);
         }}
         onSkip={session ? () => { window.history.replaceState({}, '', '/'); setInvitationDone(true); } : undefined}
+      />
+    );
+  }
+
+  if (gate) {
+    return (
+      <MfaGate
+        token={gate.base.token}
+        email={gate.base.user_email || gate.base.user?.email || ''}
+        setupRequired={gate.setupRequired}
+        methods={gate.methods}
+        onComplete={(fullToken) => {
+          const sess = { ...gate.base, token: fullToken };
+          localStorage.setItem('escapesymas_admin_session', JSON.stringify(sess));
+          setGate(null);
+          setSession(sess);
+        }}
+        onCancel={handleLogout}
       />
     );
   }

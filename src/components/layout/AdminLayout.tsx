@@ -92,8 +92,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'social-content', label: 'Contenido TikTok', icon: Icons.Clapperboard },
     { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount },
     { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
+    { id: 'account-security', label: 'Seguridad', icon: Icons.ShieldCheck },
   ];
-  const navItems = isAdvisor ? allNavItems.filter((i) => i.id === 'chat') : allNavItems;
+  const navItems = isAdvisor ? allNavItems.filter((i) => i.id === 'chat' || i.id === 'account-security') : allNavItems;
 
   const renderNavButtons = () => {
     return navItems.map(item => {
