@@ -27,7 +27,7 @@ interface ContentSlot {
   ig_hashtags?: string | null;
   ig_status?: 'generating' | 'ready' | 'error' | null;
   ig_error?: string | null;
-  slides?: { title: string; text: string; scene: string }[];
+  slides?: { title: string; text: string; scene?: string; kind?: 'scene' | 'card' | 'price'; image?: string }[];
   video_status?: 'generating' | 'done' | 'error' | null;
   video_error?: string | null;
   status: 'draft' | 'generating' | 'ready' | 'published' | 'skipped';
@@ -425,8 +425,10 @@ const SlidesEditor: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
       {slides.map((sl, i) => (
         <div key={i} className="flex gap-2 items-start bg-tech-carbon border border-tech-border rounded-lg p-2">
           <span className="text-[10px] font-black text-tech-muted w-5 pt-2">{i + 1}</span>
+          {sl.kind === 'price' && <span className="sr-only">Diapositiva del precio</span>}
           <div className="flex-1 space-y-1.5">
             <input value={sl.title} onChange={(e) => set(i, 'title', e.target.value)} maxLength={80} placeholder="Título" className={`${inputClass} font-bold`} />
+            {sl.kind === 'price' && <p className="text-[10px] text-tech-muted">Diapositiva del precio: el precio (y el anterior tachado si está en oferta) lo pone el sistema con el del catálogo.</p>}
             <textarea value={sl.text} onChange={(e) => set(i, 'text', e.target.value)} maxLength={220} rows={2} placeholder="Texto" className={`${inputClass} text-xs resize-y`} />
           </div>
         </div>
@@ -599,14 +601,14 @@ const SlotEditor: React.FC<{
               <div className="flex gap-2 flex-wrap">
                 {slot.media_urls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group">
-                    <img src={url} alt={`Imagen ${i + 1}`} className={`${slot.campaign ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
+                    <img src={url} alt={`Imagen ${i + 1}`} className={`${slot.campaign || slot.slides?.[0]?.kind ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
                     <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
                   </a>
                 ))}
               </div>
             </div>
           )}
-          {slot.campaign && <SlidesEditor slot={slot} adminToken={adminToken} onChanged={onChanged} />}
+          {(slot.campaign || !!slot.slides?.[0]?.kind) && <SlidesEditor slot={slot} adminToken={adminToken} onChanged={onChanged} />}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className={labelClass}>Texto de la publicación</label>
