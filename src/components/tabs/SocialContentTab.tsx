@@ -444,6 +444,52 @@ const SlidesEditor: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
 };
 
 /** Ajustes y contenido de una publicación (al desplegarla). */
+/** Nombre corto para el enlace de producto de TikTok: marca primero, máx. 30 caracteres, sin cortar palabras. */
+const shortProductName = (name: string, brand?: string | null, max = 30) => {
+  let clean = name.replace(/\s*·\s*Ref\..*$/i, '').replace(/\s+-\s+[A-Z0-9]{5,}$/, '').replace(/,/g, '').trim();
+  if (brand) {
+    const re = new RegExp(`\\b${brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    clean = `${brand} ${clean.replace(re, '').replace(/\s+/g, ' ').trim()}`;
+  }
+  const words: string[] = [];
+  for (const word of clean.split(/\s+/)) {
+    if ([...words, word].join(' ').length > max) break;
+    words.push(word);
+  }
+  while (words.length > 1 && /^(de|del|con|para|y|a|en|la|el|los|las|tipo)$/i.test(words[words.length - 1])) words.pop();
+  return words.join(' ') || clean.slice(0, max);
+};
+
+/**
+ * Datos para crear el enlace de producto en la app de TikTok (no hay API para
+ * crearlo): URL con UTM para ver las visitas en Umami, nombre corto y foto.
+ */
+const TikTokProductLink: React.FC<{ slot: ContentSlot; onCopy: (value: string) => void }> = ({ slot, onCopy }) => {
+  if (!slot.product_sku || slot.campaign) return null;
+  const url = `https://escapesymas.com/producto/${encodeURIComponent(slot.product_sku)}?utm_source=tiktok&utm_medium=social&utm_campaign=publicacion-${slot.id}`;
+  const name = shortProductName(slot.product_name || slot.product_sku, slot.product_brand);
+  return (
+    <div className="bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Icons.Link2 size={14} className="text-tech-yellow" />
+        <span className={labelClass + ' mb-0'}>Enlace de producto para TikTok</span>
+      </div>
+      <p className="text-[10px] text-tech-muted">En la app de TikTok, al publicar: «Añadir enlace» → «Producto» → pega la URL y el nombre. Las visitas salen en Umami como tiktok / publicacion-{slot.id}.</p>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 text-xs text-tech-text truncate font-mono">{url}</span>
+        <button onClick={() => onCopy(url)} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Copy size={11} /> URL</button>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 text-xs text-tech-text truncate">{name} <span className="text-tech-muted">({name.length}/30)</span></span>
+        <button onClick={() => onCopy(name)} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Copy size={11} /> Nombre</button>
+        {slot.product_image && (
+          <a href={slot.product_image} target="_blank" rel="noreferrer" download className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Download size={11} /> Foto</a>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SlotEditor: React.FC<{
   slot: ContentSlot;
   adminToken: string;
@@ -584,6 +630,8 @@ const SlotEditor: React.FC<{
           </button>
         )}
       </div>
+
+      {hasContent && !generating && <TikTokProductLink slot={slot} onCopy={copyToClipboard} />}
 
       {/* Contenido generado */}
       {hasContent && !generating && (
