@@ -809,6 +809,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(initialSlotId || null);
   const [autoScheduling, setAutoScheduling] = useState(false);
+  const [generatingAll, setGeneratingAll] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showLogos, setShowLogos] = useState(false);
   const [newWhen, setNewWhen] = useState('');
@@ -865,6 +866,31 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anyGenerating, fetchSlots]);
+
+  // Borradores sin contenido de los próximos 7 días (los de marca necesitan tema).
+  const weekEnd = Date.now() + 7 * 86400000;
+  const pendingCount = slots.filter((s) => s.status === 'draft' && !s.copy
+    && +new Date(s.scheduled_at) > Date.now() && +new Date(s.scheduled_at) <= weekEnd
+    && (!s.campaign || !!s.topic)).length;
+
+  const handleGenerateAll = async () => {
+    if (!window.confirm(`¿Generar con IA las ${pendingCount} publicaciones pendientes de los próximos 7 días? Se hacen una detrás de otra (1-2 min cada una).`)) return;
+    setGeneratingAll(true);
+    try {
+      const res = await fetch('/api/social-content/generate-pending', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ days: 7 }) });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showToast(data.queued ? `Generando ${data.queued} publicaciones… puedes cerrar el panel` : 'No hay publicaciones pendientes', 'success');
+        fetchSlots(true);
+      } else {
+        showToast(data.error || 'No se pudo empezar a generar', 'error');
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
 
   const handleAutoSchedule = async () => {
     setAutoScheduling(true);
@@ -935,6 +961,16 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
           {autoScheduling ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.CalendarPlus size={14} />}
           Rellenar próximos 7 días
         </button>
+        {pendingCount > 0 && (
+          <button
+            onClick={handleGenerateAll}
+            disabled={generatingAll || anyGenerating}
+            className="bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-5 py-3 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-orange-950/20"
+          >
+            {generatingAll || anyGenerating ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />}
+            Generar pendientes ({pendingCount})
+          </button>
+        )}
       </div>
 
       {showLogos && <BrandLogos adminToken={adminToken} onClose={() => setShowLogos(false)} />}
