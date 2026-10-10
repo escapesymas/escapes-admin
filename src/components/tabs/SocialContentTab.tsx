@@ -816,6 +816,8 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   const [newFormat, setNewFormat] = useState<ContentSlot['format']>('video');
   const [newCampaign, setNewCampaign] = useState(false);
   const [newTopic, setNewTopic] = useState('');
+  // Historial: publicaciones de los últimos 90 días, de la más reciente a la más antigua.
+  const [history, setHistory] = useState(false);
   const slotsRef = useRef<ContentSlot[]>([]);
 
   const authHeaders = () => ({ 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' });
@@ -824,12 +826,14 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
     if (!silent) setLoading(true);
     try {
       const from = new Date();
-      from.setDate(from.getDate() - 1);
-      const res = await fetch(`/api/social-content?from=${from.toISOString()}`, { headers: authHeaders() });
+      from.setDate(from.getDate() - (history ? 90 : 1));
+      const range = history ? `&to=${new Date().toISOString()}` : '';
+      const res = await fetch(`/api/social-content?from=${from.toISOString()}${range}`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
-        setSlots(data.items || []);
-        slotsRef.current = data.items || [];
+        const items: ContentSlot[] = history ? [...(data.items || [])].reverse() : data.items || [];
+        setSlots(items);
+        slotsRef.current = items;
       } else if (!silent) {
         showToast('Error al cargar el calendario de contenido', 'error');
       }
@@ -839,7 +843,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
       if (!silent) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminToken]);
+  }, [adminToken, history]);
 
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
@@ -945,6 +949,10 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2 flex-wrap">
+        <button onClick={() => { setHistory((v) => !v); setExpandedId(null); }}
+          className={`px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${history ? 'bg-tech-yellow text-tech-text' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
+          {history ? <><Icons.CalendarDays size={14} /> Ver calendario</> : <><Icons.History size={14} /> Historial</>}
+        </button>
         <button onClick={() => setShowLogos((v) => !v)}
           className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
           <Icons.BadgeCheck size={14} /> Logos de marcas
@@ -1005,9 +1013,13 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
         </div>
       )}
 
+      {history && (
+        <p className="text-xs text-tech-muted">Publicaciones de los últimos 90 días, de la más reciente a la más antigua. Ábrelas para descargar el vídeo o las fotos y copiar el texto.</p>
+      )}
+
       {!slots.length && (
         <div className="bg-tech-card border border-tech-border rounded-xl p-10 text-center text-tech-muted text-sm">
-          No hay nada programado. Pulsa "Rellenar próximos 7 días" para crear los huecos recomendados.
+          {history ? 'No hay publicaciones en los últimos 90 días.' : 'No hay nada programado. Pulsa "Rellenar próximos 7 días" para crear los huecos recomendados.'}
         </div>
       )}
 
