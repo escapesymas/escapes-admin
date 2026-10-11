@@ -82,10 +82,10 @@ export const MyCommissions: React.FC<MyCommissionsProps> = ({ adminToken, agentI
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Icons.Wallet size={18} className="text-tech-yellow" />
         <p className="font-bold text-tech-text">Comisiones de {data.agent.name}</p>
-        <p className="text-[11px] text-tech-muted ml-2">
+        <p className="text-[11px] text-tech-muted w-full md:w-auto md:ml-2">
           {String(data.sharePct ?? 50).replace('.', ',')} % del margen neto de tus productos (en los pedidos nuevos). Se pueden cobrar {data.holdDays} días después del pago del cliente (plazo de devolución).
         </p>
       </div>
@@ -111,7 +111,40 @@ export const MyCommissions: React.FC<MyCommissionsProps> = ({ adminToken, agentI
             <button onClick={() => setFilter('all')} className="ml-auto text-tech-yellow hover:underline">Ver todas</button>
           )}
         </div>
-        <table className="w-full text-xs">
+        {/* Móvil: una tarjeta por comisión (la tabla no cabe). */}
+        <div className="md:hidden divide-y divide-tech-border">
+          {rows.length === 0 && <p className="p-4 text-xs text-tech-muted">Sin comisiones en este estado.</p>}
+          {rows.map((r) => (
+            <div key={r.id} className="p-3 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-tech-text font-bold truncate">{r.customer_name || r.customer_email || '—'}</p>
+                  <p className="text-[10px] text-tech-muted">
+                    {fmtDate(r.created_at)} · <span className="font-mono">{r.order_number || 'sin pedido'}</span>
+                  </p>
+                </div>
+                <p className={`text-base font-black whitespace-nowrap ${r.state === 'void' ? 'text-tech-muted line-through' : r.state === 'available' ? 'text-emerald-400' : 'text-tech-text'}`}>
+                  {r.commission_cents == null && r.state === 'awaiting' ? '≈ ' : ''}{formatPrice(r.amount)}
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className={`px-1.5 py-0.5 rounded border text-[10px] uppercase font-mono ${STATE_INFO[r.state].cls}`}>{STATE_INFO[r.state].label}</span>
+                {r.conversation_id && (
+                  <button onClick={() => onOpenConversation(r.conversation_id!)} className="text-tech-muted hover:text-tech-yellow flex items-center gap-1 text-[11px]">
+                    <Icons.MessageSquare size={13} /> Ver chat
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-tech-muted">
+                {r.status_label}{r.order_total != null ? ` · pedido de ${formatPrice(Number(r.order_total))}` : ''}
+                {r.state === 'holding' && r.available_on ? ` · cobrable desde el ${fmtDate(r.available_on)}` : ''}
+                {r.state === 'paid_out' ? ` · pagada el ${fmtDate(r.payout_paid_at)} (${r.payout_method})` : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <table className="w-full text-xs hidden md:table">
           <thead className="text-[10px] uppercase font-mono text-tech-muted border-b border-tech-border">
             <tr>
               <th className="text-left p-3">Fecha</th>
@@ -158,10 +191,10 @@ export const MyCommissions: React.FC<MyCommissionsProps> = ({ adminToken, agentI
         {data.payouts.length === 0 && <p className="text-xs text-tech-muted">Todavía no hay pagos.</p>}
         <ul className="divide-y divide-tech-border">
           {data.payouts.map((p) => (
-            <li key={p.id} className="py-2 flex items-center gap-3 text-xs">
+            <li key={p.id} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
               <Icons.CheckCircle2 size={14} className="text-emerald-400" />
               <span className="text-tech-text">{fmtDate(p.paid_at)}</span>
-              <span className="text-tech-muted">{p.method}{p.reference ? ` · ${p.reference}` : ''}{p.note ? ` · ${p.note}` : ''}</span>
+              <span className="text-tech-muted order-last w-full pl-[26px] md:order-none md:w-auto md:pl-0">{p.method}{p.reference ? ` · ${p.reference}` : ''}{p.note ? ` · ${p.note}` : ''}</span>
               <span className="ml-auto font-bold text-tech-text">{formatPrice(p.amount_cents)}</span>
             </li>
           ))}
