@@ -301,10 +301,10 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
                     {a.role === 'admin' ? 'Administrador' : a.online ? (a.paused ? 'En pausa' : 'Conectado') : 'Desconectado'}
                   </p>
                   {a.role === 'asesor' && (
-                    <p className={`text-[10px] mt-1 flex items-center gap-1 ${a.legal?.current ? 'text-emerald-400' : 'text-amber-400'}`}
+                    <p className={`text-[10px] mt-1 flex items-center gap-1 whitespace-nowrap ${a.legal?.current ? 'text-emerald-400' : 'text-amber-400'}`}
                       title={a.legal ? `Versión ${a.legal.version}${a.legal.emailed_at ? ` · copia enviada el ${fmtDate(a.legal.emailed_at)}` : ''}` : 'Se le pedirá al entrar en su panel'}>
                       <Icons.ShieldCheck size={11} />
-                      {a.legal?.current ? `Datos y confidencialidad: aceptado ${fmtDate(a.legal.accepted_at)}` : 'Datos y confidencialidad: pendiente'}
+                      {a.legal?.current ? `RGPD firmado ${fmtDate(a.legal.accepted_at)}` : 'RGPD pendiente'}
                       <button onClick={() => sendLegal(a)} className="underline text-tech-muted hover:text-tech-text ml-1">enviar copia</button>
                     </p>
                   )}
