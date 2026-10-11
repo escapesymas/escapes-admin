@@ -54,6 +54,14 @@ interface Payout {
   paid_at: string;
 }
 
+interface Announcement {
+  id: number;
+  title: string;
+  body: string | null;
+  created_at: string;
+  recipients: { user_id: number; name: string; read_at: string | null }[];
+}
+
 interface Overview {
   holdDays: number;
   defaultShare: number;
@@ -89,6 +97,7 @@ const METHODS = ['Transferencia', 'Bizum', 'Stripe', 'Efectivo', 'Otro'];
 const pct = (v: number | null, digits = 1) => (v == null ? '—' : `${(v * 100).toFixed(digits).replace('.', ',')} %`);
 const pctRaw = (v: number | null, digits = 1) => (v == null ? '—' : `${v.toFixed(digits).replace('.', ',')} %`);
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const fmtDateTime = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const duration = (s: number | null) => {
   if (s == null) return '—';
   if (s < 60) return `${s} s`;
@@ -118,6 +127,7 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
   const [detail, setDetail] = useState<AdvisorRow | null>(null);
   const [notice, setNotice] = useState({ title: '', body: '', to: 'all' });
   const [sendingNotice, setSendingNotice] = useState(false);
+  const [sent, setSent] = useState<Announcement[] | null>(null);
 
   const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
@@ -134,6 +144,20 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
   }, [adminToken, period]);
 
   useEffect(() => { setData(null); load(); }, [load]);
+
+  const loadSent = useCallback(() => {
+    fetch('/api/admin/advisors/announcements', { headers: { Authorization: `Bearer ${adminToken}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSent(d?.announcements || []))
+      .catch(() => setSent([]));
+  }, [adminToken]);
+
+  // Los avisos enviados se refrescan cada minuto para ver quién los va leyendo.
+  useEffect(() => {
+    loadSent();
+    const t = setInterval(loadSent, 60_000);
+    return () => clearInterval(t);
+  }, [loadSent]);
 
   const saveShare = async (a: AdvisorRow) => {
     const raw = shareDraft[a.id];
@@ -184,6 +208,7 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
       if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
       showToast(`Aviso enviado a ${d.sent} asesor${d.sent === 1 ? '' : 'es'}`, 'success');
       setNotice({ title: '', body: '', to: 'all' });
+      loadSent();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'No se pudo enviar', 'error');
     } finally {
@@ -359,6 +384,47 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
             {sendingNotice ? <Icons.Loader2 size={13} className="animate-spin" /> : <Icons.Send size={13} />} Enviar aviso
           </button>
         </div>
+      </div>
+
+      {/* Avisos enviados y quién los ha leído */}
+      <div className="bg-tech-card border border-tech-border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-tech-border flex items-center gap-2">
+          <Icons.MailCheck size={16} className="text-tech-yellow" />
+          <p className="font-bold text-tech-text text-sm">Avisos enviados</p>
+          <p className="text-[10px] text-tech-muted">Se marca como leído cuando el asesor lo abre en su panel.</p>
+        </div>
+        {sent === null && <p className="p-4 text-xs text-tech-muted">Cargando…</p>}
+        {sent?.length === 0 && <p className="p-4 text-xs text-tech-muted">Todavía no has enviado avisos.</p>}
+        <ul className="divide-y divide-tech-border">
+          {sent?.map((a) => {
+            const read = a.recipients.filter((r) => r.read_at).length;
+            return (
+              <li key={a.id} className="p-4 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-tech-text">{a.title}</p>
+                    {a.body && <p className="text-xs text-tech-muted whitespace-pre-line mt-0.5">{a.body}</p>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-tech-muted">{fmtDateTime(a.created_at)}</p>
+                    <p className={`text-xs font-bold ${read === a.recipients.length ? 'text-emerald-400' : 'text-tech-yellow'}`}>
+                      Leído por {read} de {a.recipients.length}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {a.recipients.map((r) => (
+                    <span key={r.user_id}
+                      className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1 ${r.read_at ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-tech-border text-tech-muted'}`}>
+                      {r.read_at ? <Icons.CheckCheck size={11} /> : <Icons.Clock size={11} />}
+                      {r.name}{r.read_at ? ` · ${fmtDateTime(r.read_at)}` : ' · sin leer'}
+                    </span>
+                  ))}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       {/* Registrar pago */}
