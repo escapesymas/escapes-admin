@@ -21,6 +21,16 @@ if (ADVISORS_HOST) {
 }
 import { Shield, Key, AlertCircle, Loader2 } from 'lucide-react';
 
+/** El JWT ya ha caducado (campo exp). */
+function tokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -104,6 +114,21 @@ export default function App() {
     setSession(null);
     setGate(null);
   };
+
+  // La sesión del personal caduca (24 h): con el panel abierto se seguía viendo
+  // pero el servidor ya lo rechazaba todo. Al caducar, se vuelve a la entrada.
+  useEffect(() => {
+    if (!session?.token) return;
+    const check = () => {
+      if (!tokenExpired(session.token)) return;
+      handleLogout();
+      setError('Tu sesión ha caducado. Vuelve a entrar.');
+    };
+    check();
+    const t = setInterval(check, 60_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
 
   if (loading) {
     return (
