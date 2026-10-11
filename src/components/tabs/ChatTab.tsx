@@ -11,6 +11,7 @@ import { AgentsManager } from '../chat/AgentsManager';
 import { QuickReplyPicker, QuickRepliesManager, useQuickReplies, fillReply } from '../chat/QuickReplies';
 import { CustomerProfile } from '../chat/CustomerProfile';
 import { ChatStats } from '../chat/ChatStats';
+import { AiChats } from '../chat/AiChats';
 import { isPushNotificationSupported, getCurrentSubscription, subscribeToPushNotifications, registerServiceWorker, isIOS, isStandalonePWA } from '../../utils/pushNotificationManager';
 
 /**
@@ -155,7 +156,7 @@ const MessageBody: React.FC<{ m: Message; onOpenImage?: (url: string) => void }>
 
 const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange, isAdvisor = false }) => {
   const { showToast } = useToast();
-  const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents' | 'stats'>('chats');
+  const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents' | 'stats' | 'ai'>('chats');
   const [myOnline, setMyOnline] = useState(false);
   const [myPaused, setMyPaused] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
@@ -705,10 +706,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       )}
 
       {/* Conversaciones / ventas */}
-      <div className="flex gap-2 text-[10px] font-mono uppercase">
+      <div className="flex flex-wrap gap-2 text-[10px] font-mono uppercase">
         {([
           ['chats', 'Conversaciones', Icons.MessagesSquare],
-          ...(isAdvisor ? [] : [['sales', 'Ventas del chat', Icons.BadgeEuro], ['stats', 'Estadísticas', Icons.BarChart3], ['agents', 'Asesores', Icons.Users]] as const),
+          ...(isAdvisor ? [] : [['ai', 'Conversaciones IA', Icons.Bot], ['sales', 'Ventas del chat', Icons.BadgeEuro], ['stats', 'Estadísticas', Icons.BarChart3], ['agents', 'Asesores', Icons.Users]] as const),
           ['commissions', 'Mis comisiones', Icons.Wallet],
         ] as const).map(([v, label, Icon]) => (
           <button key={v} onClick={() => setView(v)}
@@ -719,6 +720,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       </div>
 
       {view === 'agents' && !isAdvisor && <AgentsManager adminToken={adminToken} showToast={showToast} />}
+
+      {view === 'ai' && !isAdvisor && (
+        <AiChats adminToken={adminToken} onOpenConversation={(id) => { setScope('closed'); setSelectedId(id); setView('chats'); }} />
+      )}
 
       {view === 'stats' && !isAdvisor && <ChatStats adminToken={adminToken} />}
 
