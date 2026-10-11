@@ -80,7 +80,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
     { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
-    { id: 'advisors', label: 'Asesores y comisiones', icon: Icons.HandCoins },
+    { id: 'advisors', label: 'Asesores', icon: Icons.HandCoins },
     { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
     { id: 'products', label: 'Productos', icon: Icons.Package },
     { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount },
@@ -105,7 +105,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <button
           key={item.id}
           onClick={() => handleTabClick(item.id)}
-          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-md text-xs font-mono uppercase tracking-wider transition-all border ${
+          className={`w-full flex items-center gap-3 text-left px-4 py-3.5 rounded-md text-xs font-mono uppercase tracking-wider transition-all border ${
             isActive 
               ? 'bg-tech-card border-tech-border text-tech-yellow shadow-inner' 
               : 'border-transparent text-tech-muted hover:text-tech-text hover:bg-[#1a1b1e]/40'
