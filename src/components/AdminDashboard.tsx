@@ -16,6 +16,7 @@ import { AccountSecurity } from './security/AccountSecurity';
 import ChatTab from './tabs/ChatTab';
 import { AdvisorsTab } from './tabs/AdvisorsTab';
 import { AgentNotifications } from './chat/AgentNotifications';
+import { AgentLegalGate } from './chat/AgentLegalGate';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
@@ -556,6 +557,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       chatPendingCount={chatPending}
       isAdvisor={isAdvisor}
     >
+      {isAdvisor && <AgentLegalGate adminToken={adminToken} onLogout={onLogout} />}
       <div className={activeTab === 'chat' ? 'p-4 sm:p-6' : 'p-4 sm:p-6 md:p-10'}>
         {error && (
           <div className="mb-6 p-4 bg-red-950/20 border border-red-900/30 text-red-400 text-xs rounded-xl flex items-center gap-3">

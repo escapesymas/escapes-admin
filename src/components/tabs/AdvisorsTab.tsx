@@ -21,6 +21,8 @@ interface AdvisorRow {
   online: boolean;
   paused: boolean;
   commission_share: number;
+  /** Última aceptación de la información de protección de datos (current = versión vigente). */
+  legal: { version: string; accepted_at: string; emailed_at: string | null; current: boolean } | null;
   attended: number;
   avg_first_response_s: number | null;
   avg_rating: number | null;
@@ -196,6 +198,18 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
     }
   };
 
+  const sendLegal = async (a: AdvisorRow) => {
+    try {
+      const res = await fetch(`/api/admin/advisors/${a.id}/legal/send`, { method: 'POST', headers });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
+      showToast(`Copia enviada a ${a.name} (y a info@ para el archivo)`, 'success');
+      load();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo enviar', 'error');
+    }
+  };
+
   const sendNotice = async () => {
     if (!notice.title.trim()) return;
     setSendingNotice(true);
@@ -286,6 +300,14 @@ export const AdvisorsTab: React.FC<{ adminToken: string; onOpenConversation: (id
                     <span className={`w-1.5 h-1.5 rounded-full ${a.online ? (a.paused ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-tech-border'}`} />
                     {a.role === 'admin' ? 'Administrador' : a.online ? (a.paused ? 'En pausa' : 'Conectado') : 'Desconectado'}
                   </p>
+                  {a.role === 'asesor' && (
+                    <p className={`text-[10px] mt-1 flex items-center gap-1 ${a.legal?.current ? 'text-emerald-400' : 'text-amber-400'}`}
+                      title={a.legal ? `Versión ${a.legal.version}${a.legal.emailed_at ? ` · copia enviada el ${fmtDate(a.legal.emailed_at)}` : ''}` : 'Se le pedirá al entrar en su panel'}>
+                      <Icons.ShieldCheck size={11} />
+                      {a.legal?.current ? `Datos y confidencialidad: aceptado ${fmtDate(a.legal.accepted_at)}` : 'Datos y confidencialidad: pendiente'}
+                      <button onClick={() => sendLegal(a)} className="underline text-tech-muted hover:text-tech-text ml-1">enviar copia</button>
+                    </p>
+                  )}
                 </td>
                 <td className="p-3 text-right">
                   <div className="inline-flex items-center gap-1">
