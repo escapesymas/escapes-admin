@@ -39,6 +39,8 @@ interface Payout {
 interface Data {
   agent: { id: number; name: string };
   holdDays: number;
+  /** % del margen neto que cobra el asesor. */
+  sharePct?: number;
   totals: Record<State, number>;
   commissions: CommissionRow[];
   payouts: Payout[];
@@ -84,7 +86,7 @@ export const MyCommissions: React.FC<MyCommissionsProps> = ({ adminToken, agentI
         <Icons.Wallet size={18} className="text-tech-yellow" />
         <p className="font-bold text-tech-text">Comisiones de {data.agent.name}</p>
         <p className="text-[11px] text-tech-muted ml-2">
-          50 % del margen neto de tus productos. Se pueden cobrar {data.holdDays} días después del pago del cliente (plazo de devolución).
+          {String(data.sharePct ?? 50).replace('.', ',')} % del margen neto de tus productos (en los pedidos nuevos). Se pueden cobrar {data.holdDays} días después del pago del cliente (plazo de devolución).
         </p>
       </div>
 

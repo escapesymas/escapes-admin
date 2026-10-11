@@ -74,6 +74,14 @@ export const AgentNotifications: React.FC<AgentNotificationsProps> = ({ adminTok
     return () => clearInterval(t);
   }, [load]);
 
+  // Escape cierra la ventana.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   const markRead = async (body: { ids?: number[]; all?: boolean }) => {
     try {
       await fetch('/api/agent/notifications/read', { method: 'POST', headers, body: JSON.stringify(body) });

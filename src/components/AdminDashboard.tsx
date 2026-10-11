@@ -609,7 +609,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           {(isAdvisor || activeTab === 'chat') && (
             <div className="flex flex-wrap items-center gap-2">
               {isAdvisor && <AgentNotifications adminToken={adminToken} onOpenLink={openAdminLink} />}
-              {activeTab === 'chat' && <div id="chat-header-actions" className="flex flex-wrap items-center gap-2" />}
+              {/* «contents»: los botones del chat comparten fila con la campana (en el móvil no quedan sola). */}
+              {activeTab === 'chat' && <div id="chat-header-actions" className="contents" />}
             </div>
           )}
           {activeTab === 'products' && (
