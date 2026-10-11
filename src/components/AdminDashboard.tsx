@@ -14,6 +14,8 @@ import ReviewsTab from './tabs/ReviewsTab';
 import SocialContentTab from './tabs/SocialContentTab';
 import { AccountSecurity } from './security/AccountSecurity';
 import ChatTab from './tabs/ChatTab';
+import { AdvisorsTab } from './tabs/AdvisorsTab';
+import { AgentNotifications } from './chat/AgentNotifications';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
 import OrderCreationModal from './OrderCreationModal';
@@ -578,6 +580,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'margins' && 'Precios y Márgenes'}
               {activeTab === 'notifications' && 'Avisos del panel'}
               {activeTab === 'chat' && 'Chat con clientes'}
+              {activeTab === 'advisors' && 'Asesores y comisiones'}
               {activeTab === 'accounting' && 'Contabilidad y Facturación'}
               {activeTab === 'reviews' && 'Gestión de Reseñas y Valoraciones'}
               {activeTab === 'social-content' && 'Contenido para TikTok'}
@@ -595,6 +598,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'notifications' && 'Historial de avisos y qué recibir en el móvil.'}
               {activeTab === 'chat' && (isAdvisor ? 'Clientes que el asistente IA te ha pasado. Responde aquí.' : 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.')}
+              {activeTab === 'advisors' && 'Rendimiento de cada asesor, su % de comisión, lo que hay que pagarle y avisos al equipo.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
               {activeTab === 'social-content' && 'Calendario de publicaciones con copy e imágenes generadas por IA, listas para subir.'}
@@ -602,7 +606,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             </p>
           </div>
           {/* Conectado, avisos y ajustes del chat (los coloca ChatTab). */}
-          {activeTab === 'chat' && <div id="chat-header-actions" className="flex flex-wrap items-center gap-2" />}
+          {(isAdvisor || activeTab === 'chat') && (
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdvisor && <AgentNotifications adminToken={adminToken} onOpenLink={openAdminLink} />}
+              {activeTab === 'chat' && <div id="chat-header-actions" className="flex flex-wrap items-center gap-2" />}
+            </div>
+          )}
           {activeTab === 'products' && (
             <button
               onClick={() => {
@@ -722,6 +731,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'chat' && (
           <ChatTab adminToken={adminToken} initialConversationId={pendingChatId} onSummaryChange={setChatPending} isAdvisor={isAdvisor} />
+        )}
+
+        {activeTab === 'advisors' && !isAdvisor && (
+          <AdvisorsTab adminToken={adminToken} onOpenConversation={(id) => { setPendingChatId(id); setActiveTab('chat'); }} />
         )}
 
         {activeTab === 'notifications' && (

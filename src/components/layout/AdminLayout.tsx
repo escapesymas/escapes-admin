@@ -80,6 +80,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
     { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
+    { id: 'advisors', label: 'Asesores y comisiones', icon: Icons.HandCoins },
     { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
     { id: 'products', label: 'Productos', icon: Icons.Package },
     { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount },
