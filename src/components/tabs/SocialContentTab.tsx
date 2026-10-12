@@ -460,14 +460,21 @@ const shortProductName = (name: string, brand?: string | null, max = 30) => {
   return words.join(' ') || clean.slice(0, max);
 };
 
+/** Neumáticos: Bihr no trae su compatibilidad, así que el enlace lleva al buscador por medida. */
+const isTyre = (name?: string | null) => /^neum[aá]tico\b/i.test((name || '').trim());
+
 /**
  * Datos para crear el enlace de producto en la app de TikTok (no hay API para
  * crearlo): URL con UTM para ver las visitas en Umami, nombre corto y foto.
  */
 const TikTokProductLink: React.FC<{ slot: ContentSlot; onCopy: (value: string) => void }> = ({ slot, onCopy }) => {
   if (!slot.product_sku || slot.campaign) return null;
-  const url = `https://escapesymas.com/producto/${encodeURIComponent(slot.product_sku)}?utm_source=tiktok&utm_medium=social&utm_campaign=publicacion-${slot.id}`;
-  const name = shortProductName(slot.product_name || slot.product_sku, slot.product_brand);
+  const utm = `utm_source=tiktok&utm_medium=social&utm_campaign=publicacion-${slot.id}`;
+  const tyre = isTyre(slot.product_name);
+  const url = tyre
+    ? `https://escapesymas.com/universales/neumaticos?${utm}`
+    : `https://escapesymas.com/producto/${encodeURIComponent(slot.product_sku)}?${utm}`;
+  const name = tyre ? 'Busca tu neumático por medida' : shortProductName(slot.product_name || slot.product_sku, slot.product_brand);
   return (
     <div className="bg-tech-carbon border border-tech-border rounded-lg p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -475,6 +482,7 @@ const TikTokProductLink: React.FC<{ slot: ContentSlot; onCopy: (value: string) =
         <span className={labelClass + ' mb-0'}>Enlace de producto para TikTok</span>
       </div>
       <p className="text-[10px] text-tech-muted">En la app de TikTok, al publicar: «Añadir enlace» → «Producto» → pega la URL y el nombre. Las visitas salen en Umami como tiktok / publicacion-{slot.id}.</p>
+      {tyre && <p className="text-[10px] text-tech-yellow">Neumático: el enlace lleva al buscador por medida (los neumáticos no traen compatibilidad con motos).</p>}
       <div className="flex items-center gap-2">
         <span className="flex-1 min-w-0 text-xs text-tech-text truncate font-mono">{url}</span>
         <button onClick={() => onCopy(url)} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Copy size={11} /> URL</button>
