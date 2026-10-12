@@ -28,6 +28,8 @@ interface ChatTabProps {
   onSummaryChange?: (pending: number) => void;
   /** Asesor (panel de asesores): sin ventas, sin equipo ni horario global. */
   isAdvisor?: boolean;
+  /** Ventana compacta del programa de escritorio: solo las conversaciones. */
+  compact?: boolean;
 }
 
 interface ConversationItem {
@@ -154,7 +156,7 @@ const MessageBody: React.FC<{ m: Message; onOpenImage?: (url: string) => void }>
   return <>{m.content}</>;
 };
 
-const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange, isAdvisor = false }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, onSummaryChange, isAdvisor = false, compact = false }) => {
   const { showToast } = useToast();
   const [view, setView] = useState<'chats' | 'sales' | 'commissions' | 'agents' | 'stats' | 'ai'>('chats');
   const [myOnline, setMyOnline] = useState(false);
@@ -532,7 +534,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
   const busyElsewhere = isAdvisor && unassigned && !!myOpenChat && myOpenChat.id !== selectedId;
 
   return (
-    <div className={view === 'chats' ? 'flex flex-col gap-3 md:h-[calc(100vh-9.5rem)]' : 'space-y-4'}>
+    <div className={compact ? 'flex flex-col gap-3 flex-1 min-h-0' : view === 'chats' ? 'flex flex-col gap-3 md:h-[calc(100vh-9.5rem)]' : 'space-y-4'}>
       {/* Conectado, avisos y ajustes: en la cabecera de la página. El estado
           (si la IA ofrece asesor, horario, conectados) va en el tooltip. */}
       {headerEl && createPortal(
@@ -706,7 +708,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ adminToken, initialConversationId, on
       )}
 
       {/* Conversaciones / ventas */}
-      <div className="flex flex-wrap gap-2 text-[10px] font-mono uppercase">
+      <div className={`flex flex-wrap gap-2 text-[10px] font-mono uppercase ${compact ? 'hidden' : ''}`}>
         {([
           ['chats', 'Conversaciones', Icons.MessagesSquare],
           ...(isAdvisor ? [] : [['ai', 'Conversaciones IA', Icons.Bot], ['sales', 'Ventas del chat', Icons.BadgeEuro], ['stats', 'Estadísticas', Icons.BarChart3], ['agents', 'Asesores', Icons.Users]] as const),

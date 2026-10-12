@@ -545,6 +545,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
     );
   }
 
+  // Ventana compacta del programa de escritorio (?compacto=1): solo el chat,
+  // sin menú ni cabecera; con el ancho de móvil enseña la lista o la conversación.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('compacto') === '1') {
+    return (
+      <div className="h-screen bg-tech-carbon text-tech-text font-sans p-2 flex flex-col">
+        {isAdvisor && <AgentLegalGate adminToken={adminToken} onLogout={onLogout} />}
+        <ChatTab adminToken={adminToken} initialConversationId={pendingChatId} onSummaryChange={setChatPending} isAdvisor={isAdvisor} compact />
+      </div>
+    );
+  }
+
   return (
     <AdminLayout 
       session={session} 
