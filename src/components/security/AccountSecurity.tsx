@@ -3,7 +3,7 @@ import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import {
   MfaStatus, mfaStatus, registerPasskey, deletePasskey, totpSetup, totpEnable, totpDisable,
-  recoveryRegenerate, passkeysSupported, friendlyWebAuthnError,
+  recoveryRegenerate, passkeysSupported, friendlyWebAuthnError, StaffDevice, listDevices, deleteDevice,
 } from './mfaApi';
 
 /** «Seguridad» en el panel: métodos de verificación en dos pasos de la propia cuenta. */
@@ -14,8 +14,12 @@ export const AccountSecurity: React.FC<{ adminToken: string }> = ({ adminToken }
   const [qr, setQr] = useState<{ qr: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
   const [codes, setCodes] = useState<string[] | null>(null);
+  const [devices, setDevices] = useState<StaffDevice[]>([]);
 
-  const load = () => mfaStatus(adminToken).then(setStatus).catch(() => setStatus(null));
+  const load = () => Promise.all([
+    mfaStatus(adminToken).then(setStatus).catch(() => setStatus(null)),
+    listDevices(adminToken).then((r) => setDevices(r.devices)).catch(() => setDevices([])),
+  ]);
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [adminToken]);
 
   const act = async (fn: () => Promise<any>, ok: string) => {
@@ -77,6 +81,23 @@ export const AccountSecurity: React.FC<{ adminToken: string }> = ({ adminToken }
           </>
         )}
       </div>
+
+      {devices.length > 0 && (
+        <div className={box}>
+          <p className="text-xs font-black uppercase tracking-wider text-tech-text flex items-center gap-2"><Icons.Monitor size={15} className="text-tech-yellow" /> Programas de escritorio</p>
+          <p className="text-[11px] text-tech-muted">Ordenadores con el programa de asesores que mantienen la sesión abierta sin volver a pedir el código. Si pierdes uno o ya no lo usas, quítalo.</p>
+          <ul className="space-y-1.5">
+            {devices.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 bg-tech-carbon border border-tech-border rounded-lg p-2 text-xs">
+                <Icons.Laptop size={14} className="text-tech-yellow shrink-0" />
+                <span className="flex-1 text-tech-text">{d.name || 'Programa de escritorio'} <span className="text-tech-muted">· desde {fmt(d.created_at)} · último uso {fmt(d.last_used_at)}</span></span>
+                <button onClick={() => { if (window.confirm('¿Quitar este equipo? Tendrá que volver a iniciar sesión.')) act(() => deleteDevice(adminToken, d.id), 'Equipo quitado'); }}
+                  className="text-tech-muted hover:text-red-400" aria-label="Quitar"><Icons.Trash2 size={13} /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className={box}>
         <p className="text-xs font-black uppercase tracking-wider text-tech-text flex items-center gap-2"><Icons.LifeBuoy size={15} className="text-tech-yellow" /> Códigos de recuperación</p>

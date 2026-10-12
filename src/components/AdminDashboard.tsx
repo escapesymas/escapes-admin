@@ -615,7 +615,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
               {activeTab === 'reviews' && 'Modera, aprueba, rechaza y administra las opiniones dejadas por los clientes.'}
               {activeTab === 'social-content' && 'Calendario de publicaciones con copy e imágenes generadas por IA, listas para subir.'}
-              {activeTab === 'account-security' && 'Verificación en dos pasos: Face ID / huella, Google Authenticator y códigos de recuperación.'}
+              {activeTab === 'account-security' && 'Verificación en dos pasos: Face ID / huella, Google Authenticator, códigos de recuperación y programas de escritorio recordados.'}
             </p>
           </div>
           {/* Conectado, avisos y ajustes del chat (los coloca ChatTab). */}

@@ -64,6 +64,11 @@ export const recoveryVerify = (token: string, code: string) => call<MfaResult>(t
 export const recoveryRegenerate = (token: string) => call<{ recoveryCodes: string[] }>(token, '/recovery/regenerate', { method: 'POST' });
 export const deletePasskey = (token: string, id: number) => call<{ success: boolean }>(token, `/passkey/${id}`, { method: 'DELETE' });
 
+/** Programas de escritorio que renuevan la sesión sin pedir contraseña ni código. */
+export interface StaffDevice { id: number; name: string | null; created_at: string; last_used_at: string | null; expires_at: string }
+export const listDevices = (token: string) => call<{ devices: StaffDevice[] }>(token, '/devices');
+export const deleteDevice = (token: string, id: number) => call<{ ok: boolean }>(token, `/devices/${id}`, { method: 'DELETE' });
+
 /** Mensaje claro cuando el usuario cancela Face ID o el navegador no lo permite. */
 export function friendlyWebAuthnError(err: any): string {
   const name = err?.name || '';
