@@ -456,7 +456,10 @@ const shortProductName = (name: string, brand?: string | null, max = 30) => {
     if ([...words, word].join(' ').length > max) break;
     words.push(word);
   }
-  while (words.length > 1 && /^(de|del|con|para|y|a|en|la|el|los|las|tipo)$/i.test(words[words.length - 1])) words.pop();
+  // El color o la variante van detrás de un guion («Casco … 500 - negro mate»): fuera.
+  const dash = words.findIndex((w, i) => i > 1 && /^[-–—]$/.test(w));
+  if (dash > 0) words.splice(dash);
+  while (words.length > 1 && /^(de|del|con|para|y|a|en|la|el|los|las|tipo|[-–—+·&\/])$/i.test(words[words.length - 1])) words.pop();
   return words.join(' ') || clean.slice(0, max);
 };
 
