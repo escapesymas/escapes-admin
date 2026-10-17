@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import { formatPrice } from '../../utils/format';
+import { displayImage } from '../../utils/image';
 import type { ChatProductCard } from '../chat/ProductPicker';
 
 interface ContentSlot {
@@ -86,7 +87,7 @@ const ProductSearch: React.FC<{ adminToken: string; onPick: (p: ChatProductCard)
           {results.map((p) => (
             <button key={p.id} onClick={() => { onPick(p); setQ(''); setResults([]); }}
               className="w-full flex items-center gap-2 p-2 text-left hover:bg-tech-border/30">
-              {p.image ? <img src={p.image} alt="" className="w-10 h-10 object-cover rounded" /> : <div className="w-10 h-10 rounded bg-tech-border" />}
+              {p.image ? <img src={displayImage(p.image)} alt="" className="w-10 h-10 object-cover rounded" /> : <div className="w-10 h-10 rounded bg-tech-border" />}
               <span className="flex-1 min-w-0">
                 <span className="block text-xs text-tech-text truncate">{p.name}</span>
                 <span className="block text-[10px] text-tech-muted">{p.brand} · {p.sku} · {formatPrice(p.sale_price ?? p.price)} · {p.in_stock ? 'en stock' : 'sin stock'}</span>
@@ -168,7 +169,7 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {photo && <a href={photo} target="_blank" rel="noreferrer" download className={btn}><Icons.Download size={13} /> Foto del producto</a>}
+        {photo && <a href={displayImage(photo, 800)} target="_blank" rel="noreferrer" download className={btn}><Icons.Download size={13} /> Foto del producto</a>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -280,7 +281,7 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
               {sources.map((u) => (
                 <button key={u} onClick={() => setSource(u)}
                   className={`rounded-lg overflow-hidden border-2 ${source === u ? 'border-purple-400' : 'border-transparent opacity-70'}`}>
-                  <img src={u} alt="" className="w-16 h-28 object-cover bg-white" />
+                  <img src={displayImage(u)} alt="" className="w-16 h-28 object-cover bg-white" />
                 </button>
               ))}
             </div>
@@ -494,7 +495,7 @@ const TikTokProductLink: React.FC<{ slot: ContentSlot; onCopy: (value: string) =
         <span className="flex-1 min-w-0 text-xs text-tech-text truncate">{name} <span className="text-tech-muted">({name.length}/30)</span></span>
         <button onClick={() => onCopy(name)} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Copy size={11} /> Nombre</button>
         {slot.product_image && (
-          <a href={slot.product_image} target="_blank" rel="noreferrer" download className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Download size={11} /> Foto</a>
+          <a href={displayImage(slot.product_image, 800)} target="_blank" rel="noreferrer" download className="text-tech-yellow text-[10px] font-bold flex items-center gap-1 shrink-0"><Icons.Download size={11} /> Foto</a>
         )}
       </div>
     </div>
@@ -608,7 +609,7 @@ const SlotEditor: React.FC<{
           <label className={labelClass}>Producto</label>
           {product ? (
             <div className="flex items-center gap-2 bg-tech-carbon border border-tech-border rounded-lg p-2">
-              {product.image ? <img src={product.image} alt="" className="w-10 h-10 object-cover rounded" /> : <Icons.Package className="w-5 h-5 text-tech-muted" />}
+              {product.image ? <img src={displayImage(product.image)} alt="" className="w-10 h-10 object-cover rounded" /> : <Icons.Package className="w-5 h-5 text-tech-muted" />}
               <span className="flex-1 min-w-0 text-xs text-tech-text truncate">{product.name} <span className="text-tech-muted">· {product.sku}</span></span>
               {!generating && <button onClick={() => setProduct(null)} className="text-tech-muted hover:text-red-400" aria-label="Quitar producto"><Icons.X size={14} /></button>}
             </div>
@@ -660,7 +661,7 @@ const SlotEditor: React.FC<{
               <div className="flex gap-2 flex-wrap">
                 {slot.media_urls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group">
-                    <img src={url} alt={`Imagen ${i + 1}`} className={`${slot.campaign || slot.slides?.[0]?.kind ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
+                    <img src={displayImage(url)} alt={`Imagen ${i + 1}`} className={`${slot.campaign || slot.slides?.[0]?.kind ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
                     <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
                   </a>
                 ))}
@@ -1051,7 +1052,7 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
                     <div className="text-lg font-black text-tech-text w-14 shrink-0">{date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
                     {slot.final_media?.length ? <Icons.CheckCircle2 size={14} className="text-sky-400 shrink-0" /> : null}
                     {(slot.media_urls?.[0] || slot.product_image)
-                      ? <img src={slot.media_urls?.[0] || slot.product_image || ''} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
+                      ? <img src={displayImage(slot.media_urls?.[0] || slot.product_image)} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
                       : <div className="w-10 h-10 rounded bg-tech-border/50 shrink-0 grid place-items-center"><Icons.Image size={14} className="text-tech-muted" /></div>}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

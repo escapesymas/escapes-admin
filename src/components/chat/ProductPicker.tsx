@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { formatPrice } from '../../utils/format';
+import { displayImage } from '../../utils/image';
 
 /** Producto tal y como lo ve el cliente (precios en céntimos). */
 export interface ChatProductCard {
@@ -107,7 +108,7 @@ export const ProductPicker: React.FC<ProductPickerProps> = ({ adminToken, onPick
             className="w-full flex items-center gap-2 p-2 rounded-lg border border-tech-border hover:border-tech-yellow text-left"
           >
             {p.image
-              ? <img src={p.image} alt="" className="w-10 h-10 object-contain bg-white rounded" loading="lazy" />
+              ? <img src={displayImage(p.image)} alt="" className="w-10 h-10 object-contain bg-white rounded" loading="lazy" />
               : <span className="w-10 h-10 bg-tech-carbon rounded flex items-center justify-center"><Icons.Package size={16} className="text-tech-muted" /></span>}
             <span className="flex-1 min-w-0">
               <span className="block text-xs text-tech-text leading-tight line-clamp-2">{p.name}</span>
