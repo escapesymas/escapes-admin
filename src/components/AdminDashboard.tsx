@@ -88,6 +88,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showProductDetail, setShowProductDetail] = useState(false);
   const [selectedDetailProductId, setSelectedDetailProductId] = useState<number | null>(null);
+  // Sube cada vez que se descargan fotos desde la ficha: la pestaña «Sin imagen» vuelve a pedir su listado.
+  const [productImagesVersion, setProductImagesVersion] = useState(0);
   const [showOrderCreationModal, setShowOrderCreationModal] = useState(false);
   const [initialUserForOrder, setInitialUserForOrder] = useState<User | null>(null);
 
@@ -691,6 +693,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             userId={adminWpId || ''}
             adminEmail={adminEmail || ''}
             adminToken={adminToken}
+            imagesVersion={productImagesVersion}
           />
         )}
 
@@ -1432,7 +1435,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         <ProductDetailModal
           session={session}
           productId={selectedDetailProductId}
-          onImagesChanged={(id, images) => setProducts(prev => prev.map(p => (p.id === id ? { ...p, images } : p)))}
+          onImagesChanged={(id, images) => {
+            setProducts(prev => prev.map(p => (p.id === id ? { ...p, images } : p)));
+            setProductImagesVersion(v => v + 1);
+          }}
           onClose={() => { setShowProductDetail(false); setSelectedDetailProductId(null); }}
         />
       )}

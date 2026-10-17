@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 import { AttributesManager } from './AttributesManager';
 import { TaxonomiesTab } from './TaxonomiesTab';
+import MissingImagesPanel from './MissingImagesPanel';
 import { formatPrice } from '../../utils/format';
 import { displayImage } from '../../utils/image';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -29,6 +30,8 @@ interface ProductsTabProps {
   userId: string;
   adminEmail: string;
   adminToken: string;
+  /** Cambia cuando se descargan fotos de un producto desde su ficha. */
+  imagesVersion?: number;
 }
 
 type ColumnKey = 'image' | 'name' | 'brand' | 'sku' | 'barcode' | 'supplier_code' | 'cost' | 'price' | 'sale_price' | 'stock' | 'dropshipping' | 'ondemand' | 'delivery_plant' | 'category' | 'category2' | 'category3' | 'weight' | 'dimensions' | 'compatibility' | 'status' | 'created_at' | 'actions';
@@ -82,8 +85,9 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   userId,
   adminEmail,
   adminToken,
+  imagesVersion = 0,
 }) => {
-  const [subTab, setSubTab] = useState<'catalog' | 'attributes' | 'taxonomies'>('catalog');
+  const [subTab, setSubTab] = useState<'catalog' | 'attributes' | 'taxonomies' | 'images'>('catalog');
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -317,7 +321,18 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
         <button onClick={() => setSubTab('taxonomies')} className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg transition-all ${subTab === 'taxonomies' ? 'bg-tech-yellow text-black' : 'text-tech-muted hover:text-tech-text'}`}>
           <Icons.Tags className="w-4 h-4 inline mr-2"/> Taxonomías (Categorías/Motos)
         </button>
+        <button onClick={() => setSubTab('images')} className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg transition-all ${subTab === 'images' ? 'bg-tech-yellow text-black' : 'text-tech-muted hover:text-tech-text'}`}>
+          <Icons.ImageOff className="w-4 h-4 inline mr-2"/> Sin imagen
+        </button>
       </div>
+
+      {subTab === 'images' && (
+        <MissingImagesPanel
+          adminToken={adminToken}
+          refreshKey={imagesVersion}
+          onOpenProduct={(id) => { setSelectedDetailProductId(id); setShowProductDetail(true); }}
+        />
+      )}
 
       {subTab === 'attributes' && <AttributesManager userId={userId} adminEmail={adminEmail} adminToken={adminToken} />}
       {subTab === 'taxonomies' && (
