@@ -3,7 +3,7 @@ import * as Icons from 'lucide-react';
 import ConfirmModal from '../modals/ConfirmModal';
 import { useToast } from '../ToastContext';
 
-interface BrandStats { total: number; done: number; saved: number; notFound: number; failed: number; skipped: number; lastError?: string }
+interface BrandStats { total: number; done: number; saved: number; notFound: number; failed: number; skipped: number; lastError?: string; gaveUp?: boolean }
 
 interface RepairJob {
   status: 'idle' | 'running' | 'stopping' | 'done' | 'stopped' | 'error';
@@ -51,7 +51,14 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
   const [confirm, setConfirm] = useState<null | 'stock' | 'all'>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Aviso fijo: la descarga se cortó porque el servidor se reinició. */
+  const [interrupted, setInterrupted] = useState(false);
+  /** Cuántas veces seguidas ha fallado el sondeo (red, servidor reiniciándose, sesión caducada). */
+  const [pollFailures, setPollFailures] = useState(0);
+  const [pollError, setPollError] = useState('');
   const wasActive = useRef(false);
+  /** Solo vale la última respuesta pedida: una vieja no puede volver a abrir un trabajo ya acabado. */
+  const seq = useRef(0);
   const onFinishedRef = useRef(onFinished);
   onFinishedRef.current = onFinished;
 
@@ -71,7 +78,17 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
 
   const refresh = useCallback(async () => {
     if (!adminToken) return;
-    try { setJob(await call('')); } catch { /* el estado se vuelve a pedir en el siguiente intento */ }
+    const mine = ++seq.current;
+    try {
+      const next = await call('');
+      if (mine !== seq.current) return;
+      setJob(next);
+      setPollFailures(0);
+    } catch (e: any) {
+      if (mine !== seq.current) return;
+      setPollFailures(n => n + 1);
+      setPollError(e?.message || 'sin respuesta');
+    }
   }, [adminToken, call]);
 
   // Al abrir la pestaña se recoge el trabajo que ya estuviera en marcha.
@@ -86,7 +103,11 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
 
   useEffect(() => {
     if (wasActive.current && !active && job) {
-      if (job.status === 'done') showToast(`Descarga terminada: ${num(job.saved)} productos con foto nueva`, 'success');
+      if (job.status === 'idle') {
+        // El servidor ya no sabe de ese trabajo: se reinició (nueva versión) y lo cortó. Lo descargado hasta entonces está guardado.
+        setInterrupted(true);
+        showToast('La descarga se cortó porque el servidor se reinició. Lo ya descargado está guardado.', 'error');
+      } else if (job.status === 'done') showToast(job.message || `Descarga terminada: ${num(job.saved)} productos con foto nueva`, job.message ? 'error' : 'success');
       else if (job.status === 'error') showToast(job.message || 'La descarga se paró por un problema', 'error');
       else showToast(`Descarga parada: ${num(job.saved)} productos con foto nueva`, 'success');
       onFinishedRef.current();
@@ -98,6 +119,8 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
     setConfirm(null);
     setSending(true);
     setError(null);
+    setInterrupted(false);
+    seq.current++;
     try {
       setJob(await call('', { method: 'POST', body: JSON.stringify({ scope, useApi }) }));
     } catch (e: any) {
@@ -110,10 +133,12 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
 
   const stop = async () => {
     setSending(true);
+    seq.current++;
     try { setJob(await call('/stop', { method: 'POST' })); } catch (e: any) { setError(e?.message || 'No se pudo parar'); } finally { setSending(false); }
   };
 
-  const pct = job && job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0;
+  // Sin redondear hacia arriba: no marca 100 % hasta que se han tratado todos.
+  const pct = job && job.total > 0 ? (job.done >= job.total ? 100 : Math.min(99, Math.floor((job.done / job.total) * 100))) : 0;
   const hasReport = !!job && job.status !== 'idle' && job.status !== 'running' && job.status !== 'stopping';
   const worstBrands = job
     ? Object.entries(job.brands).filter(([, b]) => b.notFound + b.failed + b.skipped > 0)
@@ -136,7 +161,8 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
             <p className="text-[11px] text-tech-muted mt-2 max-w-3xl leading-relaxed">
               Busca la foto de cada producto en el zip de su marca de Bihr (y, si no está, en su API) y la guarda en nuestro servidor.
               Va en segundo plano, primero los productos con stock. Si no encuentra la foto, el producto se queda como está.
-              Puedes parar cuando quieras. Si el servidor se actualiza mientras tanto, se corta: vuelve a pulsar y sigue donde lo dejó.
+              Puedes parar cuando quieras. Si el servidor se actualiza mientras tanto, se corta: vuelve a pulsar y se revisan de nuevo los productos
+              que sigan sin foto (lo ya descargado se conserva, pero los que no se encontraron se vuelven a intentar).
             </p>
           )}
         </div>
@@ -175,6 +201,16 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
       )}
 
       {error && <div className="bg-red-950/20 border border-red-900/30 text-red-400 rounded-xl px-4 py-3 text-xs">{error}</div>}
+      {interrupted && !active && (
+        <div className="bg-yellow-950/20 border border-yellow-900/30 text-yellow-400 rounded-xl px-4 py-3 text-xs">
+          La descarga se cortó porque el servidor se reinició (nueva versión). Lo que ya se había descargado está guardado: vuelve a pulsar para seguir con el resto.
+        </div>
+      )}
+      {pollFailures >= 3 && (
+        <div className="bg-yellow-950/20 border border-yellow-900/30 text-yellow-400 rounded-xl px-4 py-3 text-xs" role="status">
+          No se consigue ver cómo va la descarga ({pollError}). Puede seguir en marcha en el servidor; se vuelve a intentar sola cada pocos segundos.
+        </div>
+      )}
 
       {job && job.status !== 'idle' && (
         <div className="space-y-3">
@@ -183,16 +219,16 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
           )}
           {job.total > 0 && (
             <>
-              <div className="h-2 rounded-full bg-[#1a1b1e] overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-2 rounded-full bg-[#1a1b1e] overflow-hidden" role="progressbar" aria-label="Progreso de la descarga" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full bg-tech-yellow transition-all" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-tech-muted">
                 <span><span className="text-tech-text font-bold">{num(job.done)}</span> de {num(job.total)} ({pct} %)</span>
                 <span className="text-green-500"><span className="font-bold">{num(job.saved)}</span> con foto nueva</span>
-                <span><span className="text-tech-text font-bold">{num(job.notFound)}</span> sin foto en Bihr</span>
+                <span title="La fuente funciona pero no tiene la foto de estos productos"><span className="text-tech-text font-bold">{num(job.notFound)}</span> sin foto encontrada</span>
                 <span className={job.failed ? 'text-red-400' : ''}><span className="font-bold">{num(job.failed)}</span> con fallo</span>
-                {job.skipped > 0 && <span><span className="text-tech-text font-bold">{num(job.skipped)}</span> saltados</span>}
-                {active && job.currentBrand && <span>Marca: <span className="text-tech-text font-bold">{job.currentBrand}</span></span>}
+                {job.skipped > 0 && <span title="Ya tenían foto, se estaban tratando a la vez o su marca se dejó a medias por fallos seguidos"><span className="text-tech-text font-bold">{num(job.skipped)}</span> saltados</span>}
+                {active && job.done > 0 && <span>Marca: <span className="text-tech-text font-bold">{job.currentBrand || '(sin marca)'}</span></span>}
               </div>
             </>
           )}
@@ -201,19 +237,22 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
 
       {hasReport && worstBrands.length > 0 && (
         <details className="text-[11px] text-tech-muted">
-          <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-[#cbd5e1]">Marcas donde no se encontró la foto o falló</summary>
+          <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-[#cbd5e1]">Marcas donde no se encontró la foto, falló o se dejó a medias</summary>
           <div className="overflow-x-auto mt-3">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-tech-border text-[9px] uppercase tracking-widest font-black">
-                  <th className="pb-2">Marca</th><th className="pb-2 text-right">Productos</th><th className="pb-2 text-right">Con foto</th>
-                  <th className="pb-2 text-right">Sin foto en Bihr</th><th className="pb-2 text-right">Fallos</th><th className="pb-2 text-right">Saltados</th><th className="pb-2 pl-4">Último fallo</th>
+                  <th scope="col" className="pb-2">Marca</th><th scope="col" className="pb-2 text-right">Productos</th><th scope="col" className="pb-2 text-right">Con foto</th>
+                  <th scope="col" className="pb-2 text-right">Sin foto encontrada</th><th scope="col" className="pb-2 text-right">Fallos</th><th scope="col" className="pb-2 text-right">Saltados</th><th scope="col" className="pb-2 pl-4">Último fallo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/50">
                 {worstBrands.map(([brand, b]) => (
                   <tr key={brand}>
-                    <td className="py-2 font-bold text-tech-text">{brand}</td>
+                    <td className="py-2 font-bold text-tech-text">
+                      {brand || '(sin marca)'}
+                      {b.gaveUp && <span className="ml-2 px-1.5 py-0.5 rounded border text-[9px] bg-yellow-950/20 text-yellow-400 border-yellow-900/30 font-black uppercase" title="Se dejó a medias por fallos seguidos; vuelve a lanzar la descarga para reintentarla">a medias</span>}
+                    </td>
                     <td className="py-2 text-right">{num(b.total)}</td>
                     <td className="py-2 text-right">{num(b.saved)}</td>
                     <td className="py-2 text-right">{num(b.notFound)}</td>

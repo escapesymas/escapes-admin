@@ -75,7 +75,12 @@ const MissingImagesPanel: React.FC<Props> = ({ adminToken, onOpenProduct, refres
       const r = await fetch(query({ page: String(page), limit: String(PAGE_SIZE), ...(refresh ? { refresh: '1' } : {}) }), { headers: { Authorization: `Bearer ${adminToken}` } });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body?.error || `HTTP ${r.status}`);
-      if (id === lastRequest.current) setData(body as AuditResponse);
+      if (id === lastRequest.current) {
+        // Tras descargar fotos el listado es más corto: si la página en la que estabas ya no existe, vuelve a la última.
+        const pagesNow = Math.max(1, Math.ceil((body as AuditResponse).total / (body as AuditResponse).limit));
+        if (page > pagesNow) { setPage(pagesNow); return; }
+        setData(body as AuditResponse);
+      }
     } catch (e: any) {
       if (id === lastRequest.current) setError(e?.message || 'No se pudo revisar el catálogo');
     } finally {
