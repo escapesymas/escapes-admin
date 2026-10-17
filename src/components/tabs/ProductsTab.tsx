@@ -3,6 +3,7 @@ import * as Icons from 'lucide-react';
 import { AttributesManager } from './AttributesManager';
 import { TaxonomiesTab } from './TaxonomiesTab';
 import { formatPrice } from '../../utils/format';
+import { displayImage } from '../../utils/image';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Product, ProductImage, ProductCompatibilityEntry, Category } from '../../types/admin';
 
@@ -177,7 +178,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
             title="Ver detalle del producto"
           >
             {imageUrl ? (
-              <img src={imageUrl} className="w-full h-full object-cover" alt={p.name} loading="lazy" decoding="async" />
+              <img src={displayImage(imageUrl, 200)} className="w-full h-full object-cover" alt={p.name} loading="lazy" decoding="async" />
             ) : (
               <Icons.Package className="w-5 h-5 text-zinc-700" />
             )}

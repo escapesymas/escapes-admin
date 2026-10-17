@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as Icons from 'lucide-react';
 import type { Product, ProductCompatibilityEntry } from '../../types/admin';
+import { displayImage } from '../../utils/image';
 
 type ProductDetailStats = {
   all_time: { units_sold: number; revenue_cents: number; order_count: number };
@@ -46,6 +47,15 @@ type ProductDetailResponse = {
     quantity: number | null;
     status: string | null;
   };
+};
+
+type RepairAttempt = { source: 'catalogo' | 'zip' | 'api'; target: string; ok: boolean; detail: string };
+type RepairResult = { saved: number; attempts: RepairAttempt[] };
+
+const REPAIR_SOURCE_LABEL: Record<RepairAttempt['source'], string> = {
+  catalogo: 'Catálogo',
+  zip: 'Zip de la marca',
+  api: 'API de Bihr',
 };
 
 interface ProductDetailModalProps {
@@ -133,6 +143,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'sales' | 'details' | 'compatibility'>('sales');
   const [activeImg, setActiveImg] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [repairing, setRepairing] = useState(false);
+  const [repair, setRepair] = useState<RepairResult | null>(null);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = session?.token || session?.jwt || '';
@@ -158,7 +172,32 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [productId, session?.token, session?.jwt]);
+  }, [productId, session?.token, session?.jwt, reloadKey]);
+
+  const repairImages = async () => {
+    const token = session?.token || session?.jwt || '';
+    if (!token || repairing) return;
+    setRepairing(true);
+    setRepair(null);
+    setRepairError(null);
+    try {
+      const r = await fetch(`/api/admin/products/${productId}/repair-images`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body?.error || `HTTP ${r.status}`);
+      setRepair(body as RepairResult);
+      if ((body as RepairResult).saved > 0) {
+        setActiveImg(0);
+        setReloadKey(k => k + 1);
+      }
+    } catch (e: any) {
+      setRepairError(e?.message || 'No se pudieron descargar las fotos');
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -254,7 +293,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
                 {/* Main image */}
                 <div className="relative aspect-square bg-[#1a1b1e] border border-tech-border rounded-xl overflow-hidden flex items-center justify-center">
                   {currentImgSrc ? (
-                    <img src={currentImgSrc} alt={images[activeImg]?.alt || product.name} className="w-full h-full object-contain" />
+                    <img src={displayImage(currentImgSrc, 800)} alt={images[activeImg]?.alt || product.name} className="w-full h-full object-contain" />
                   ) : (
                     <Icons.Package className="w-16 h-16 text-zinc-700" />
                   )}
@@ -278,13 +317,45 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
                           }`}
                         >
                           {src ? (
-                            <img src={src} alt={img.alt || ''} className="w-full h-full object-cover" />
+                            <img src={displayImage(src, 200)} alt={img.alt || ''} className="w-full h-full object-cover" />
                           ) : (
                             <Icons.ImageOff size={12} className="text-zinc-700" />
                           )}
                         </button>
                       );
                     })}
+                  </div>
+                )}
+                {/* Repair photos from Bihr */}
+                <button
+                  onClick={repairImages}
+                  disabled={repairing}
+                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-tech-yellow/40 bg-tech-yellow/10 text-tech-yellow text-[11px] font-black uppercase tracking-wider hover:bg-tech-yellow/20 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                >
+                  {repairing ? <Icons.Loader2 size={14} className="animate-spin" /> : <Icons.ImageDown size={14} />}
+                  {repairing ? 'Buscando fotos en Bihr…' : 'Descargar fotos de Bihr'}
+                </button>
+                {repairError && (
+                  <div className="p-3 bg-red-950/30 border border-red-800/50 rounded-lg text-red-400 text-[11px]">{repairError}</div>
+                )}
+                {repair && (
+                  <div className={`p-3 rounded-lg border text-[11px] space-y-2 ${
+                    repair.saved > 0 ? 'bg-green-950/20 border-green-900/40 text-green-400' : 'bg-yellow-950/20 border-yellow-900/40 text-yellow-400'
+                  }`}>
+                    <div className="font-bold">
+                      {repair.saved > 0
+                        ? `Fotos guardadas: ${repair.saved}. Ya deberían verse en la tienda.`
+                        : 'No se ha podido descargar ninguna foto. Detalle de cada intento:'}
+                    </div>
+                    <ul className="space-y-1 text-tech-muted">
+                      {repair.attempts.map((a, i) => (
+                        <li key={i} className="break-words">
+                          <span className={a.ok ? 'text-green-400' : 'text-red-400'}>{a.ok ? '✓' : '✗'}</span>{' '}
+                          <strong className="text-[#cbd5e1]">{REPAIR_SOURCE_LABEL[a.source] || a.source}</strong>
+                          {a.target ? ` · ${a.target}` : ''} — {a.detail}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>

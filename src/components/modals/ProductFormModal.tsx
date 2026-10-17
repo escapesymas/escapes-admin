@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 import type { AdminSession, Product, ProductImage, ProductCompatibilityEntry, LinkedProduct, Category, VehicleBrand, VehicleModel } from '../../types/admin';
+import { displayImage } from '../../utils/image';
 
 interface ProductFormModalProps {
   session: AdminSession;
@@ -487,7 +488,7 @@ const handleSubmit = (e: React.FormEvent) => {
                 >
                   <div className="text-zinc-600 px-2 cursor-grab"><Icons.GripVertical size={16}/></div>
                   {img.url ? (
-                    <img src={img.url} alt="preview" className="w-10 h-10 object-cover rounded bg-zinc-800" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    <img src={displayImage(img.url, 200)} alt="preview" className="w-10 h-10 object-cover rounded bg-zinc-800" onError={(e) => (e.currentTarget.style.display = 'none')} />
                   ) : (
                     <div className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded text-zinc-600"><Icons.Image size={16}/></div>
                   )}
