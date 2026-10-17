@@ -3,6 +3,7 @@ import * as Icons from 'lucide-react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useToast } from '../ToastContext';
 import BulkImageRepair from './BulkImageRepair';
+import ProbeBihrUrl from './ProbeBihrUrl';
 
 type Problem = 'sin_foto' | 'foto_remota' | 'fichero_perdido';
 
@@ -147,6 +148,8 @@ const MissingImagesPanel: React.FC<Props> = ({ adminToken, onOpenProduct, refres
         stockCount={s?.sinImagenConStock}
         onFinished={() => load(true)}
       />
+
+      <ProbeBihrUrl adminToken={adminToken} />
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
