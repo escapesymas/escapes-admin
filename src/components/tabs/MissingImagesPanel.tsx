@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useToast } from '../ToastContext';
+import BulkImageRepair from './BulkImageRepair';
 
 type Problem = 'sin_foto' | 'foto_remota' | 'fichero_perdido';
 
@@ -134,6 +135,13 @@ const MissingImagesPanel: React.FC<Props> = ({ adminToken, onOpenProduct, refres
           <div className="text-[10px] text-tech-muted mt-1">Los que se pueden vender</div>
         </div>
       </div>
+
+      <BulkImageRepair
+        adminToken={adminToken}
+        totalCount={s?.sinImagen}
+        stockCount={s?.sinImagenConStock}
+        onFinished={() => load(true)}
+      />
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
