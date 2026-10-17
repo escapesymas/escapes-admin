@@ -178,7 +178,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
             title="Ver detalle del producto"
           >
             {imageUrl ? (
-              <img src={displayImage(imageUrl, 200)} className="w-full h-full object-cover" alt={p.name} loading="lazy" decoding="async" />
+              <img src={displayImage(imageUrl, 200)} className="w-full h-full object-cover" alt={p.name} loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
             ) : (
               <Icons.Package className="w-5 h-5 text-zinc-700" />
             )}

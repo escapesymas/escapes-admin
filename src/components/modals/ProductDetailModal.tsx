@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as Icons from 'lucide-react';
 import type { Product, ProductCompatibilityEntry } from '../../types/admin';
 import { displayImage } from '../../utils/image';
@@ -62,6 +62,8 @@ interface ProductDetailModalProps {
   session: { token?: string; jwt?: string };
   productId: number;
   onClose: () => void;
+  /** Las fotos del producto cambiaron (tras descargarlas desde Bihr): para refrescar la fila del listado. */
+  onImagesChanged?: (productId: number, images: any) => void;
 }
 
 const eur = (cents: number): string =>
@@ -137,7 +139,7 @@ const DeltaBadge: React.FC<{ pct: number | null }> = ({ pct }) => {
   );
 };
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, productId, onClose }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, productId, onClose, onImagesChanged }) => {
   const [data, setData] = useState<ProductDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +149,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
   const [repairing, setRepairing] = useState(false);
   const [repair, setRepair] = useState<RepairResult | null>(null);
   const [repairError, setRepairError] = useState<string | null>(null);
+  const notifyImages = useRef(false);
 
   useEffect(() => {
     const token = session?.token || session?.jwt || '';
@@ -164,6 +167,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
           throw new Error(body?.error || `HTTP ${status}`);
         }
         setData(body);
+        if (notifyImages.current) {
+          notifyImages.current = false;
+          onImagesChanged?.(productId, body?.product?.images);
+        }
       })
       .catch(e => {
         if (!cancelled) setError(e.message || 'Error cargando producto');
@@ -190,6 +197,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
       setRepair(body as RepairResult);
       if ((body as RepairResult).saved > 0) {
         setActiveImg(0);
+        notifyImages.current = true;
         setReloadKey(k => k + 1);
       }
     } catch (e: any) {

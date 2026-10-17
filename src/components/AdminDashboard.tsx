@@ -1432,6 +1432,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         <ProductDetailModal
           session={session}
           productId={selectedDetailProductId}
+          onImagesChanged={(id, images) => setProducts(prev => prev.map(p => (p.id === id ? { ...p, images } : p)))}
           onClose={() => { setShowProductDetail(false); setSelectedDetailProductId(null); }}
         />
       )}
