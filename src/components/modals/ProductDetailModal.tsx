@@ -49,10 +49,11 @@ type ProductDetailResponse = {
   };
 };
 
-type RepairAttempt = { source: 'catalogo' | 'zip' | 'api'; target: string; ok: boolean; detail: string };
+type RepairAttempt = { source: 'detalles' | 'catalogo' | 'zip' | 'api'; target: string; ok: boolean; detail: string };
 type RepairResult = { saved: number; attempts: RepairAttempt[] };
 
 const REPAIR_SOURCE_LABEL: Record<RepairAttempt['source'], string> = {
+  detalles: 'Detalles de la API',
   catalogo: 'Catálogo',
   zip: 'Zip de la marca',
   api: 'API de Bihr',

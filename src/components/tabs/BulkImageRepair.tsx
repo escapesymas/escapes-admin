@@ -163,7 +163,7 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
           </div>
           {!active && (
             <p className="text-[11px] text-tech-muted mt-2 max-w-3xl leading-relaxed">
-              Busca la foto de cada producto en el zip de su marca de Bihr (y, si no está, en su API) y la guarda en nuestro servidor.
+              Pide a la API de Bihr el enlace de la foto de cada producto, la descarga y la guarda en nuestro servidor.
               Va en segundo plano, primero los productos con stock. Si no encuentra la foto, el producto se queda como está.
               Puedes parar cuando quieras. Si el servidor se actualiza mientras tanto, se corta: vuelve a pulsar y se revisan de nuevo los productos
               que sigan sin foto (lo ya descargado se conserva, pero los que no se encontraron se vuelven a intentar).
@@ -197,9 +197,9 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
           >
             Descargar todos{totalCount !== undefined ? ` (${num(totalCount)})` : ''}
           </button>
-          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#cbd5e1] px-2 cursor-pointer select-none" title="Más lenta: una petición cada 250 ms">
+          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#cbd5e1] px-2 cursor-pointer select-none" title="Sin marcar solo se usan los enlaces que ya se conocen (catálogo guardado y fichas), que pueden haber caducado">
             <input type="checkbox" checked={useApi} onChange={e => setUseApi(e.target.checked)} className="accent-yellow-400" />
-            Usar también la API de Bihr
+            Pedir los enlaces a la API de Bihr
           </label>
         </div>
       )}
@@ -229,7 +229,7 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
             </div>
           )}
           {job.catalog === null && (
-            <div className="text-[11px] text-tech-muted">No hay catálogo de Bihr guardado en el servidor (o no se pudo leer): solo se usan los enlaces de las fichas, el zip y la API.</div>
+            <div className="text-[11px] text-tech-muted">No hay catálogo de Bihr guardado en el servidor (o no se pudo leer): solo se usan los enlaces de las fichas y la API.</div>
           )}
           {job.total > 0 && (
             <>
