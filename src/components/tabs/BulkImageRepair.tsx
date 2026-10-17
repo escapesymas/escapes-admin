@@ -15,10 +15,14 @@ interface RepairJob {
   total: number;
   done: number;
   saved: number;
+  /** De los que tienen foto nueva, los que salieron de un enlace del catálogo de Bihr o de la ficha. */
+  savedFromLinks?: number;
   notFound: number;
   failed: number;
   skipped: number;
   currentBrand: string;
+  /** Catálogo de Bihr guardado en el servidor: null si no hay o no se pudo leer; sin definir si aún no se ha mirado. */
+  catalog?: { modifiedAt: string; refs: number; withPictures: number; forQueue: number; pictureFields: string[] } | null;
   brands: Record<string, BrandStats>;
   recentErrors: { id: number; sku: string; brand: string; message: string }[];
   message?: string;
@@ -217,6 +221,16 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
           {job.message && (
             <div className={`text-xs ${job.status === 'error' ? 'text-red-400' : 'text-tech-muted'}`}>{job.message}</div>
           )}
+          {job.catalog && (
+            <div className="text-[11px] text-tech-muted">
+              Catálogo de Bihr guardado el {new Date(job.catalog.modifiedAt).toLocaleDateString('es-ES')}: {num(job.catalog.refs)} referencias, {num(job.catalog.withPictures)} con enlace de foto.
+              {' '}<span className="text-tech-text font-bold">{num(job.catalog.forQueue)}</span> de estos {num(job.total)} productos tienen ahí su enlace.
+              {job.catalog.withPictures === 0 && <> No trae enlaces de foto (campos que parecen de foto: {job.catalog.pictureFields.join(', ') || 'ninguno'}).</>}
+            </div>
+          )}
+          {job.catalog === null && (
+            <div className="text-[11px] text-tech-muted">No hay catálogo de Bihr guardado en el servidor (o no se pudo leer): solo se usan los enlaces de las fichas, el zip y la API.</div>
+          )}
           {job.total > 0 && (
             <>
               <div className="h-2 rounded-full bg-[#1a1b1e] overflow-hidden" role="progressbar" aria-label="Progreso de la descarga" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
@@ -224,7 +238,7 @@ const BulkImageRepair: React.FC<Props> = ({ adminToken, totalCount, stockCount, 
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-tech-muted">
                 <span><span className="text-tech-text font-bold">{num(job.done)}</span> de {num(job.total)} ({pct} %)</span>
-                <span className="text-green-500"><span className="font-bold">{num(job.saved)}</span> con foto nueva</span>
+                <span className="text-green-500"><span className="font-bold">{num(job.saved)}</span> con foto nueva{!!job.savedFromLinks && <span className="text-tech-muted"> ({num(job.savedFromLinks)} de enlaces de Bihr)</span>}</span>
                 <span title="La fuente funciona pero no tiene la foto de estos productos"><span className="text-tech-text font-bold">{num(job.notFound)}</span> sin foto encontrada</span>
                 <span className={job.failed ? 'text-red-400' : ''}><span className="font-bold">{num(job.failed)}</span> con fallo</span>
                 {job.skipped > 0 && <span title="Ya tenían foto, se estaban tratando a la vez o su marca se dejó a medias por fallos seguidos"><span className="text-tech-text font-bold">{num(job.skipped)}</span> saltados</span>}
