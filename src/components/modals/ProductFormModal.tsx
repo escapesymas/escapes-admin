@@ -34,7 +34,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
   const [stockStatus, setStockStatus] = useState('in_stock');
   const [lowStockThreshold, setLowStockThreshold] = useState('5');
 
-  const [images, setImages] = useState<{url: string, alt: string}[]>([]);
+  const [images, setImages] = useState<{url: string, alt: string, orig?: ProductImage}[]>([]);
 
   const [upsells, setUpsells] = useState<LinkedProduct[]>([]);
   const [crossSells, setCrossSells] = useState<LinkedProduct[]>([]);
@@ -108,7 +108,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ session, mode, prod
       let imgs: ProductImage[] = [];
       try { imgs = product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : []; } catch {}
       if (!Array.isArray(imgs)) imgs = [];
-      setImages(imgs.map(img => typeof img === 'string' ? {url: img, alt: ''} : {url: img.url || '', alt: img.alt || ''}));
+      // Las fotos guardadas por el descargador llevan `src` (y las variantes móvil/tarjeta): se conservan al guardar.
+      setImages(imgs.map(img => typeof img === 'string' ? {url: img, alt: ''} : {url: img.url || img.src || '', alt: img.alt || '', orig: img}));
 
       let compat: ProductCompatibilityEntry[] = [];
       try { compat = product.compatibility ? (typeof product.compatibility === 'string' ? JSON.parse(product.compatibility) : product.compatibility) : []; } catch {}
@@ -168,7 +169,9 @@ const handleSubmit = (e: React.FormEvent) => {
       stock_status: stockStatus,
       low_stock_threshold: lowStockThreshold,
       description,
-      images: images,
+      images: images
+        .filter(img => img.url.trim())
+        .map(({ url, alt, orig }) => (orig && (orig.url || orig.src) === url ? { ...orig, alt } : { url, alt })),
       compatibility,
       status: 'published',
       brand,
