@@ -20,7 +20,7 @@ const ProbeBihrUrl: React.FC<Props> = ({ adminToken }) => {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [out, setOut] = useState<{ url: string; results: ProbeResult[] } | null>(null);
+  const [out, setOut] = useState<{ url: string; sent?: { length: number; end: string }; trace?: Record<string, string>; results: ProbeResult[] } | null>(null);
 
   const run = async () => {
     setBusy(true);
@@ -49,7 +49,7 @@ const ProbeBihrUrl: React.FC<Props> = ({ adminToken }) => {
       </summary>
       <div className="mt-4 space-y-3">
         <p className="text-[11px] text-tech-muted leading-relaxed max-w-3xl">
-          Pega un enlace de foto de Bihr que sí se vea en tu navegador (<span className="font-mono">api.mybihr.com/medias/…</span>). El servidor lo pide de cuatro formas distintas y te dice qué contesta Bihr a cada una.
+          Pega un enlace de foto de Bihr que sí se vea en tu navegador (<span className="font-mono">api.mybihr.com/medias/…</span>). El servidor lo pide de varias formas distintas y te dice qué contesta Bihr a cada una.
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
@@ -71,6 +71,16 @@ const ProbeBihrUrl: React.FC<Props> = ({ adminToken }) => {
         {out && (
           <div className="space-y-2">
             <div className="text-[10px] text-tech-muted font-mono break-all">{out.url}</div>
+            {out.sent && (
+              <div className="text-[10px] text-tech-muted">
+                El servidor recibió un enlace de <span className="font-bold text-tech-text">{out.sent.length}</span> caracteres que termina en <span className="font-mono text-tech-text">{out.sent.end}</span>.
+              </div>
+            )}
+            {out.trace && Object.keys(out.trace).length > 0 && (
+              <div className="text-[10px] text-tech-muted">
+                Así ve Cloudflare al servidor: <span className="font-mono text-tech-text">{Object.entries(out.trace).map(([k, v]) => `${k}=${v}`).join(' · ')}</span>
+              </div>
+            )}
             {out.results.map(r => {
               const ok = r.status === 200 && r.isImage;
               return (
