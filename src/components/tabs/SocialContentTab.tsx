@@ -979,11 +979,20 @@ const BrandLogos: React.FC<{ adminToken: string; onClose: () => void }> = ({ adm
   );
 };
 
+const SLOT_KEY = 'escapes-admin-social-slot';
+
 const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initialSlotId }) => {
   const { showToast } = useToast();
   const [slots, setSlots] = useState<ContentSlot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<number | null>(initialSlotId || null);
+  // La publicación abierta se recuerda al recargar (salvo que se entre desde un aviso de otra).
+  const [expandedId, setExpandedId] = useState<number | null>(() => {
+    if (initialSlotId) return initialSlotId;
+    try { return Number(localStorage.getItem(SLOT_KEY)) || null; } catch { return null; }
+  });
+  useEffect(() => {
+    try { if (expandedId) localStorage.setItem(SLOT_KEY, String(expandedId)); else localStorage.removeItem(SLOT_KEY); } catch { /* sin almacenamiento */ }
+  }, [expandedId]);
   const [autoScheduling, setAutoScheduling] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [showNew, setShowNew] = useState(false);

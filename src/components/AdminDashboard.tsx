@@ -31,6 +31,17 @@ import { formatPrice, formatEuros } from '../utils/format';
 import { PushNotificationToggle } from './PushNotificationToggle';
 import type { Order, Product, User, Cart, CartItem, OrderNote, OrderItem, AdminSession } from '../types/admin';
 
+/** Último módulo abierto: al recargar (o reabrir la app de inicio del iPhone) se vuelve a él, no al Dashboard. */
+const TAB_KEY = 'escapes-admin-tab';
+const KNOWN_TABS = ['stats', 'orders', 'products', 'users', 'carts', 'coupons', 'shipping', 'seo', 'sync', 'margins',
+  'notifications', 'chat', 'advisors', 'accounting', 'reviews', 'social-content', 'account-security'];
+const savedTab = (isAdvisor: boolean): string => {
+  let tab: string | null = null;
+  try { tab = localStorage.getItem(TAB_KEY); } catch { /* sin almacenamiento: Dashboard */ }
+  if (isAdvisor) return tab === 'account-security' ? tab : 'chat';
+  return tab && KNOWN_TABS.includes(tab) ? tab : 'stats';
+};
+
 interface AdminDashboardProps {
   session: AdminSession;
   onLogout: () => void;
@@ -39,7 +50,7 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout }) => {
   // Los asesores solo tienen el chat (sesiones antiguas sin rol: administrador).
   const isAdvisor = (session?.role || session?.user?.role) === 'asesor';
-  const [activeTab, setActiveTab] = useState(isAdvisor ? 'chat' : 'stats');
+  const [activeTab, setActiveTab] = useState(() => savedTab(isAdvisor));
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [chatPending, setChatPending] = useState(0);
   const [pendingChatId, setPendingChatId] = useState<number | null>(null);
@@ -139,6 +150,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       if (Number.isFinite(slot)) setPendingSlotId(slot);
     } catch { /* enlace no válido: se ignora */ }
   };
+
+  useEffect(() => {
+    try { localStorage.setItem(TAB_KEY, activeTab); } catch { /* sin almacenamiento */ }
+  }, [activeTab]);
 
   // Enlace de entrada (al abrir el panel desde un aviso) y avisos pulsados con el panel abierto.
   useEffect(() => {
