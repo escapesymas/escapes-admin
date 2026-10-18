@@ -96,7 +96,8 @@ const ProductSearch: React.FC<{ adminToken: string; onPick: (p: ChatProductCard)
       setBusy(true);
       fetch(`/api/admin/chat-products?q=${encodeURIComponent(q.trim())}`, { headers: { Authorization: `Bearer ${adminToken}` } })
         .then((r) => (r.ok ? r.json() : { products: [] }))
-        .then((d) => setResults(d.products || []))
+        // Los productos de Bihr (nuestro proveedor) no se publican en redes.
+        .then((d) => setResults((d.products || []).filter((p: ChatProductCard) => !/bihr/i.test(`${p.brand || ''} ${p.name || ''}`))))
         .catch(() => {})
         .finally(() => setBusy(false));
     }, 350);
