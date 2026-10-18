@@ -503,7 +503,7 @@ const TikTokProductLink: React.FC<{ slot: ContentSlot; onCopy: (value: string) =
         <Icons.Link2 size={14} className="text-tech-yellow" />
         <span className={labelClass + ' mb-0'}>Enlace de producto para TikTok</span>
       </div>
-      <p className="text-[10px] text-tech-muted">En la app de TikTok, al publicar: «Añadir enlace» → «Producto» → pega la URL y el nombre. Las visitas salen en Umami como tiktok / publicacion-{slot.id}.</p>
+      <p className="text-[10px] text-tech-muted">Al publicar: «Añadir enlace» → «Producto» → pega la URL y el nombre.<span className="hidden sm:inline"> Las visitas salen en Umami como tiktok / publicacion-{slot.id}.</span></p>
       {tyre && <p className="text-[10px] text-tech-yellow">Neumático: el enlace lleva al buscador por medida (los neumáticos no traen compatibilidad con motos).</p>}
       <div className="flex items-center gap-2">
         <span className="flex-1 min-w-0 text-xs text-tech-text truncate font-mono">{url}</span>
@@ -643,15 +643,15 @@ const SlotEditor: React.FC<{
         {!slot.campaign && <div className="md:col-span-2">
           <label className={labelClass}>Tipo de publicación</label>
           <select value={angle} onChange={(e) => setAngle(e.target.value)} className={inputClass} disabled={generating}>
-            <option value="">Automático (rota para no repetir la promo)</option>
+            <option value="">Automático</option>
             {Object.entries(ANGLE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <p className="text-[10px] text-tech-muted mt-1">«Para tu moto» solo si el producto tiene motos compatibles. La IA usa solo datos reales del producto y de la tienda.</p>
+          <p className="text-[10px] text-tech-muted mt-1">Automático: va rotando para no repetir la promo. «Para tu moto» solo si hay motos compatibles. La IA usa solo datos reales.</p>
         </div>}
         <div className="md:col-span-2">
           <label className={labelClass}>{slot.campaign ? 'Tema de la publicación de marca' : 'Idea concreta (opcional)'}</label>
           <input value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={500} disabled={generating}
-            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: look de invierno, salida de fin de semana…'} className={inputClass} />
+            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: look de invierno'} className={inputClass} />
         </div>
       </div>
       <div className="flex gap-2 flex-wrap items-center">
@@ -692,10 +692,10 @@ const SlotEditor: React.FC<{
           {!!slot.media_urls?.length && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className={labelClass}>Imágenes · toca para descargar</label>
+                <label className={labelClass}>Imágenes</label>
                 {!slot.campaign && (
                   <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
-                    <Icons.BadgeCheck size={11} /> Rehacer con logos
+                    <Icons.BadgeCheck size={11} /> Rehacer logos
                   </button>
                 )}
               </div>
@@ -1014,22 +1014,22 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
           {[{ v: false, label: 'Calendario', icon: <Icons.CalendarDays size={13} /> }, { v: true, label: 'Historial', icon: <Icons.History size={13} /> }].map((o) => (
             <button key={o.label} onClick={() => { if (history !== o.v) { setHistory(o.v); setExpandedId(null); } }}
               className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ${history === o.v ? 'bg-tech-yellow text-tech-text' : 'text-tech-muted hover:text-tech-text'}`}>
-              {o.icon} {o.label}
+              <span className="hidden sm:inline">{o.icon}</span> {o.label}
             </button>
           ))}
         </div>
         <div className="flex-1" />
         <button onClick={() => setShowNew((v) => !v)} title="Nueva publicación" aria-label="Nueva publicación"
-          className={`px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showNew ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
+          className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showNew ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
           <Icons.Plus size={15} /> <span className="hidden md:inline">Nueva publicación</span>
         </button>
         <button onClick={() => setShowLogos((v) => !v)} title="Logos de marcas" aria-label="Logos de marcas"
-          className={`px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showLogos ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
+          className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showLogos ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
           <Icons.BadgeCheck size={15} /> <span className="hidden md:inline">Logos de marcas</span>
         </button>
         {!history && (
           <button onClick={handleAutoSchedule} disabled={autoScheduling} title="Rellenar próximos 7 días" aria-label="Rellenar próximos 7 días"
-            className="bg-tech-border hover:bg-tech-border/70 disabled:opacity-50 text-tech-text px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+            className="bg-tech-border hover:bg-tech-border/70 disabled:opacity-50 text-tech-text p-3 rounded-xl text-xs font-bold flex items-center gap-2">
             {autoScheduling ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.CalendarPlus size={15} />}
             <span className="hidden md:inline">Rellenar 7 días</span>
           </button>
