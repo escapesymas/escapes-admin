@@ -10,6 +10,7 @@ interface ContentSlot {
   scheduled_at: string;
   format: 'video' | 'photo' | 'carousel';
   topic: string | null;
+  angle?: string | null;
   product_sku: string | null;
   product_name?: string | null;
   product_brand?: string | null;
@@ -54,6 +55,15 @@ const toLocalInput = (iso: string) => {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** Enfoques de las publicaciones de producto (ANGLES en socialContentAI del backend). */
+const ANGLE_LABEL: Record<string, string> = {
+  consejo: 'Consejo útil',
+  pregunta: 'Pregunta-problema',
+  tu_moto: 'Para tu moto',
+  guia: 'Guía de compra',
+  promo: 'Promo directa',
 };
 
 const inputClass = 'w-full bg-tech-carbon border border-tech-border rounded-lg px-3 py-2 text-sm text-tech-text';
@@ -512,6 +522,7 @@ const SlotEditor: React.FC<{
   const [when, setWhen] = useState(toLocalInput(slot.scheduled_at));
   const [format, setFormat] = useState(slot.format);
   const [topic, setTopic] = useState(slot.topic || '');
+  const [angle, setAngle] = useState(slot.angle || '');
   const [product, setProduct] = useState<{ sku: string; name: string; image: string | null } | null>(
     slot.product_sku ? { sku: slot.product_sku, name: slot.product_name || slot.product_sku, image: slot.product_image || null } : null);
   const [copy, setCopy] = useState(slot.copy || '');
@@ -521,13 +532,14 @@ const SlotEditor: React.FC<{
 
   // Al terminar de generar llega contenido nuevo: se refleja en los campos.
   useEffect(() => { setCopy(slot.copy || ''); setHashtags(slot.hashtags || ''); setScript(slot.script || ''); }, [slot.copy, slot.hashtags, slot.script]);
+  useEffect(() => { setAngle(slot.angle || ''); }, [slot.angle]);
   useEffect(() => {
     setProduct(slot.product_sku ? { sku: slot.product_sku, name: slot.product_name || slot.product_sku, image: slot.product_image || null } : null);
   }, [slot.product_sku, slot.product_name, slot.product_image]);
 
   const generating = slot.status === 'generating';
   const settingsDirty = when !== toLocalInput(slot.scheduled_at) || format !== slot.format
-    || topic !== (slot.topic || '') || (product?.sku || null) !== (slot.product_sku || null);
+    || topic !== (slot.topic || '') || angle !== (slot.angle || '') || (product?.sku || null) !== (slot.product_sku || null);
   const textDirty = copy !== (slot.copy || '') || hashtags !== (slot.hashtags || '') || script !== (slot.script || '');
 
   const patch = async (body: Record<string, unknown>, ok: string) => {
@@ -548,7 +560,7 @@ const SlotEditor: React.FC<{
   };
 
   const saveSettings = () => patch({
-    scheduledAt: new Date(when).toISOString(), format, topic, productSku: product?.sku || null,
+    scheduledAt: new Date(when).toISOString(), format, topic, angle, productSku: product?.sku || null,
   }, 'Publicación actualizada');
 
   const generate = async () => {
@@ -620,10 +632,18 @@ const SlotEditor: React.FC<{
             </>
           )}
         </div>}
+        {!slot.campaign && <div className="md:col-span-2">
+          <label className={labelClass}>Tipo de publicación</label>
+          <select value={angle} onChange={(e) => setAngle(e.target.value)} className={inputClass} disabled={generating}>
+            <option value="">Automático (rota para no repetir siempre la promo)</option>
+            {Object.entries(ANGLE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <p className="text-[10px] text-tech-muted mt-1">«Para tu moto» solo se usa si el producto tiene motos compatibles en el catálogo; si no, se elige otro. La IA solo usa datos reales del producto y de la tienda.</p>
+        </div>}
         <div className="md:col-span-2">
-          <label className={labelClass}>{slot.campaign ? 'Tema de la publicación de marca' : 'Enfoque (opcional)'}</label>
+          <label className={labelClass}>{slot.campaign ? 'Tema de la publicación de marca' : 'Idea concreta (opcional)'}</label>
           <input value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={500} disabled={generating}
-            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: sonido del escape al arrancar, comparativa con el de serie, look de invierno…'} className={inputClass} />
+            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: look de invierno, salida de fin de semana, montaje en casa…'} className={inputClass} />
         </div>
       </div>
 
@@ -1058,6 +1078,9 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black uppercase tracking-wider text-tech-text">{FORMAT_LABEL[slot.format] || slot.format}</span>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${status.className}`}>{status.label}</span>
+                        {!slot.campaign && slot.angle && ANGLE_LABEL[slot.angle] && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-tech-border/60 text-tech-muted">{ANGLE_LABEL[slot.angle]}</span>
+                        )}
                         {slot.error && slot.status === 'draft' && <Icons.AlertTriangle size={12} className="text-red-400" />}
                       </div>
                       <p className="text-xs text-tech-muted truncate mt-0.5">
