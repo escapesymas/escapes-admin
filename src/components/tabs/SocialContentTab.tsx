@@ -98,7 +98,21 @@ const shareFilesSupported = (() => {
   }
 })();
 
-const fileNameOf = (url: string, name?: string) => name || decodeURIComponent(url.split('?')[0].split('/').pop() || 'archivo');
+const MIME_BY_EXT: Record<string, string> = {
+  mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+};
+const extOf = (path: string) => (path.split('?')[0].match(/\.([a-z0-9]{2,4})$/i)?.[1] || '').toLowerCase();
+
+/**
+ * Nombre con extensión: el iPhone decide por ella si ofrece «Guardar vídeo» / «Guardar imagen»
+ * (los vídeos finales se llaman p. ej. «Vídeo Hailuo», sin .mp4, y salían como archivo genérico).
+ */
+const fileNameOf = (url: string, name?: string) => {
+  const base = (name || decodeURIComponent(url.split('?')[0].split('/').pop() || 'archivo')).replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'archivo';
+  const ext = extOf(url);
+  return ext && !extOf(base) ? `${base}.${ext}` : base;
+};
 
 /**
  * Guardar archivos de una publicación. Safari solo deja abrir la hoja de compartir justo después del toque, así
@@ -119,7 +133,9 @@ function useSaveFiles(items: { url: string; name?: string }[]) {
           if (!res.ok) continue;
           const blob = await res.blob();
           if (cancelled) return;
-          const file = new File([blob], fileNameOf(it.url, it.name), { type: blob.type });
+          const name = fileNameOf(it.url, it.name);
+          const type = MIME_BY_EXT[extOf(name)] || blob.type;
+          const file = new File([blob], name, { type });
           setFiles((prev) => ({ ...prev, [it.url]: file }));
         } catch { /* si falla, al pulsar se avisa */ }
       }
