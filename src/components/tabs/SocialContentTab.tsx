@@ -85,6 +85,137 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; defaultOpen?: bo
   );
 };
 
+/**
+ * ¿El navegador puede compartir archivos? En el iPhone (panel instalado como app de inicio) es la única forma
+ * cómoda de guardar un vídeo o una foto: la hoja de compartir ofrece «Guardar vídeo» / «Guardar imagen» (a Fotos).
+ */
+const shareFilesSupported = (() => {
+  try {
+    return typeof navigator !== 'undefined' && !!navigator.canShare
+      && navigator.canShare({ files: [new File([''], 'prueba.jpg', { type: 'image/jpeg' })] });
+  } catch {
+    return false;
+  }
+})();
+
+const fileNameOf = (url: string, name?: string) => name || decodeURIComponent(url.split('?')[0].split('/').pop() || 'archivo');
+
+/**
+ * Guardar archivos de una publicación. Safari solo deja abrir la hoja de compartir justo después del toque, así
+ * que los archivos se descargan antes, en cuanto se abre la publicación; en el ordenador se descargan sin más.
+ */
+function useSaveFiles(items: { url: string; name?: string }[]) {
+  const { showToast } = useToast();
+  const [files, setFiles] = useState<Record<string, File>>({});
+  const key = items.map((i) => i.url).join('|');
+  useEffect(() => {
+    if (!shareFilesSupported) return;
+    let cancelled = false;
+    (async () => {
+      for (const it of items) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(it.url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          if (cancelled) return;
+          const file = new File([blob], fileNameOf(it.url, it.name), { type: blob.type });
+          setFiles((prev) => ({ ...prev, [it.url]: file }));
+        } catch { /* si falla, al pulsar se avisa */ }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const ready = (urls: string[]) => !shareFilesSupported || urls.every((u) => files[u]);
+  const save = (urls: string[]) => {
+    if (!urls.length) return;
+    if (shareFilesSupported) {
+      const list = urls.map((u) => files[u]).filter(Boolean);
+      if (list.length < urls.length) { showToast('Preparando los archivos… vuelve a pulsar en unos segundos', 'error'); return; }
+      navigator.share({ files: list }).catch((err) => {
+        if (err?.name !== 'AbortError') showToast('No se pudo abrir el menú para guardar. Vuelve a pulsar', 'error');
+      });
+      return;
+    }
+    for (const u of urls) {
+      const a = document.createElement('a');
+      a.href = u;
+      a.download = fileNameOf(u, items.find((i) => i.url === u)?.name);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
+  return { save, ready };
+}
+
+/**
+ * Lo que se sube a TikTok, arriba del todo: los vídeos finales primero y después las imágenes promocionales.
+ * Los botones van debajo de cada archivo (encima del vídeo chocaban con los controles del iPhone).
+ */
+const MediaToSave: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: () => void; onRecompose?: () => void }> = ({ slot, adminToken, onChanged, onRecompose }) => {
+  const { showToast } = useToast();
+  const items = [
+    ...(slot.final_media || []).map((m) => ({ url: m.url, name: m.name, video: m.type === 'video', final: true })),
+    ...(slot.media_urls || []).map((url, i) => ({ url, name: undefined as string | undefined, video: false, final: false, index: i })),
+  ];
+  const { save, ready } = useSaveFiles(items);
+  if (!items.length) return null;
+  const vertical = slot.campaign || !!slot.slides?.[0]?.kind;
+  const allUrls = items.map((i) => i.url);
+  const allReady = ready(allUrls);
+
+  const remove = async (url: string) => {
+    if (!window.confirm('¿Quitar este archivo de la publicación?')) return;
+    const res = await fetch(`/api/social-content/${slot.id}/final?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
+    if (res.ok) onChanged(); else showToast('No se pudo quitar', 'error');
+  };
+
+  const saveLabel = shareFilesSupported ? 'Guardar' : 'Descargar';
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className={labelClass + ' mb-0'}>Para publicar</label>
+        {onRecompose && !!slot.media_urls?.length && (
+          <button onClick={onRecompose} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
+            <Icons.BadgeCheck size={11} /> Rehacer logos
+          </button>
+        )}
+      </div>
+      <div className="flex gap-3 overflow-x-auto snap-x pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap">
+        {items.map((it) => (
+          <div key={it.url} className="shrink-0 snap-start space-y-1.5">
+            {it.video
+              ? <video src={it.url} controls playsInline preload="metadata" className="w-40 h-[17.8rem] object-cover rounded-lg border border-tech-border bg-black" />
+              : <img src={displayImage(it.url, 800)} alt="" className={`${vertical || it.final ? 'w-32 h-[14.2rem]' : 'w-36 h-36'} object-cover rounded-lg border border-tech-border`} />}
+            <div className="flex gap-1.5">
+              <button onClick={() => save([it.url])} disabled={!ready([it.url])}
+                className="flex-1 bg-tech-border hover:bg-tech-border/70 disabled:opacity-60 text-tech-text px-2 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                {ready([it.url]) ? <Icons.Download size={14} /> : <Icons.Loader2 size={14} className="animate-spin" />}
+                {it.video ? `${saveLabel} vídeo` : saveLabel}
+              </button>
+              {it.final && (
+                <button onClick={() => remove(it.url)} className="bg-tech-border hover:bg-red-950/50 text-red-300 px-2.5 rounded-lg" aria-label="Quitar archivo">
+                  <Icons.Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {items.length > 1 && (
+        <button onClick={() => save(allUrls)} disabled={!allReady}
+          className="w-full sm:w-auto bg-sky-500/20 hover:bg-sky-500/30 disabled:opacity-60 text-sky-200 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
+          {allReady ? <Icons.Download size={14} /> : <Icons.Loader2 size={14} className="animate-spin" />}
+          {allReady ? `${saveLabel} todo (${items.length})` : 'Preparando archivos…'}
+        </button>
+      )}
+    </div>
+  );
+};
+
 /** Buscador de productos del catálogo (mismo buscador que el chat). */
 const ProductSearch: React.FC<{ adminToken: string; onPick: (p: ChatProductCard) => void }> = ({ adminToken, onPick }) => {
   const [q, setQ] = useState('');
@@ -177,12 +308,6 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
     }
   };
 
-  const remove = async (url: string) => {
-    if (!window.confirm('¿Quitar este archivo de la publicación?')) return;
-    const res = await fetch(`/api/social-content/${slot.id}/final?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
-    if (res.ok) onChanged(); else showToast('No se pudo quitar', 'error');
-  };
-
   const btn = 'bg-tech-border hover:bg-tech-border/70 text-tech-text px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5';
 
   return (
@@ -216,22 +341,7 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
       </div>
 
       <div className="space-y-2">
-        <p className="text-[10px] uppercase font-black tracking-widest text-tech-muted">Imagen o vídeo final</p>
-        {!!slot.final_media?.length && (
-          <div className="flex gap-2 flex-wrap">
-            {slot.final_media.map((m) => (
-              <div key={m.url} className="relative">
-                {m.type === 'video'
-                  ? <video src={m.url} controls playsInline className="w-36 h-64 object-cover rounded-lg border border-tech-border bg-black" />
-                  : <a href={m.url} target="_blank" rel="noreferrer"><img src={m.url} alt={m.name} className="w-36 h-64 object-cover rounded-lg border border-tech-border" /></a>}
-                <div className="absolute top-1 right-1 flex gap-1">
-                  <a href={m.url} download={m.name} className="bg-black/70 text-white rounded p-1" aria-label="Descargar"><Icons.Download size={12} /></a>
-                  <button onClick={() => remove(m.url)} className="bg-black/70 text-red-300 rounded p-1" aria-label="Quitar"><Icons.Trash2 size={12} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <p className="text-[10px] text-tech-muted">Lo que subas aparece arriba, en «Para publicar», listo para guardar.</p>
         <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
         <button onClick={() => fileRef.current?.click()} disabled={uploading}
@@ -295,7 +405,7 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
         <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.video_error}</div>
       )}
       {generating ? (
-        <p className="text-xs text-purple-200 flex items-center gap-2"><Icons.Loader2 className="w-4 h-4 animate-spin" /> Generando el vídeo… tarda 2-5 minutos. Aparecerá abajo, en «Imagen o vídeo final», con los logos puestos.</p>
+        <p className="text-xs text-purple-200 flex items-center gap-2"><Icons.Loader2 className="w-4 h-4 animate-spin" /> Generando el vídeo… tarda 2-5 minutos. Aparecerá arriba, en «Para publicar», con los logos puestos.</p>
       ) : (
         <>
           <div>
@@ -342,6 +452,8 @@ const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChang
   const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
   const generating = slot.ig_status === 'generating';
   const has = !!slot.ig_media?.length;
+  const igMedia = slot.ig_media || [];
+  const { save, ready } = useSaveFiles(igMedia.map((url) => ({ url })));
   const dirty = copy !== (slot.ig_copy || '') || hashtags !== (slot.ig_hashtags || '');
 
   const create = async (caption: boolean) => {
@@ -386,13 +498,15 @@ const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChang
       ) : (
         <>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {slot.ig_media!.map((url, i) => (
-              <a key={url} href={url} target="_blank" rel="noreferrer" download className="relative group shrink-0">
-                <img src={url} alt={`Instagram ${i + 1}`} className="w-24 h-[7.5rem] object-cover rounded-lg border border-tech-border" />
-                <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
-              </a>
+            {igMedia.map((url, i) => (
+              <img key={url} src={url} alt={`Instagram ${i + 1}`} className="shrink-0 w-24 h-[7.5rem] object-cover rounded-lg border border-tech-border" />
             ))}
           </div>
+          <button onClick={() => save(igMedia)} disabled={!ready(igMedia)}
+            className="w-full sm:w-auto bg-pink-500/20 hover:bg-pink-500/30 disabled:opacity-60 text-pink-200 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
+            {ready(igMedia) ? <Icons.Download size={14} /> : <Icons.Loader2 size={14} className="animate-spin" />}
+            {ready(igMedia) ? `${shareFilesSupported ? 'Guardar' : 'Descargar'} imágenes (${igMedia.length})` : 'Preparando imágenes…'}
+          </button>
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className={labelClass}>Texto para Instagram</label>
@@ -684,33 +798,18 @@ const SlotEditor: React.FC<{
         </div>
       )}
 
+      {/* Vídeos e imágenes listos para guardar, siempre lo primero. */}
+      {!generating && (
+        <MediaToSave slot={slot} adminToken={adminToken} onChanged={onChanged}
+          onRecompose={slot.campaign ? undefined : () => action('/recompose', 'POST', 'Logos actualizados')} />
+      )}
+
       {/* Sin contenido (o generando): los ajustes a la vista para preparar la publicación. */}
       {!showPublish && settings}
 
       {/* Con contenido: lo necesario para publicar arriba y lo demás en apartados plegables. */}
       {showPublish && (
         <>
-          {!!slot.media_urls?.length && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className={labelClass}>Imágenes</label>
-                {!slot.campaign && (
-                  <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
-                    <Icons.BadgeCheck size={11} /> Rehacer logos
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-2 overflow-x-auto snap-x pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap">
-                {slot.media_urls.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group shrink-0 snap-start">
-                    <img src={displayImage(url)} alt={`Imagen ${i + 1}`} className={`${vertical ? 'w-28 h-[12.4rem]' : 'w-32 h-32'} object-cover rounded-lg border border-tech-border`} />
-                    <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="space-y-2">
             <label className={labelClass}>Texto de la publicación</label>
             <textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={5} className={`${inputClass} resize-y`} />
