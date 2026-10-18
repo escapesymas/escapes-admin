@@ -271,7 +271,9 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
         const statusColors: Record<string, string> = {
           published: 'bg-green-950/20 text-green-400 border-green-900/30',
           draft: 'bg-[#1a1b1e] text-tech-muted border-tech-border',
-          out_of_stock: 'bg-red-950/20 text-red-400 border-red-900/30'
+          out_of_stock: 'bg-red-950/20 text-red-400 border-red-900/30',
+          // Bihr lo descatalogó y ya no tiene stock: oculto en la tienda hasta que Bihr lo reactive.
+          descatalogado: 'bg-amber-950/20 text-amber-400 border-amber-900/30'
         };
         return (
           <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase border ${statusColors[p.status] || 'bg-[#1a1b1e] text-tech-muted'}`}>
@@ -458,6 +460,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                 <option value="published">Publicado</option>
                 <option value="draft">Borrador</option>
                 <option value="out_of_stock">Sin stock</option>
+                <option value="descatalogado">Descatalogado (Bihr)</option>
               </select>
             </div>
             <div>
