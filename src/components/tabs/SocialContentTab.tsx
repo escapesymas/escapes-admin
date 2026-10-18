@@ -45,7 +45,7 @@ const FORMAT_LABEL: Record<string, string> = { video: 'Vídeo', photo: 'Foto', c
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
   draft: { label: 'Borrador', className: 'bg-zinc-800 text-zinc-300' },
   generating: { label: 'Generando…', className: 'bg-blue-950/50 text-blue-400' },
-  ready: { label: 'Listo para publicar', className: 'bg-emerald-950/50 text-emerald-400' },
+  ready: { label: 'Listo', className: 'bg-emerald-950/50 text-emerald-400' },
   published: { label: 'Publicado', className: 'bg-tech-yellow/10 text-tech-yellow' },
   skipped: { label: 'Omitido', className: 'bg-zinc-800 text-zinc-500' },
 };
@@ -68,6 +68,22 @@ const ANGLE_LABEL: Record<string, string> = {
 
 const inputClass = 'w-full bg-tech-carbon border border-tech-border rounded-lg px-3 py-2 text-sm text-tech-text';
 const labelClass = 'text-[10px] uppercase font-black tracking-widest text-tech-muted mb-1 block';
+
+/** Apartado plegable del editor: en el móvil solo queda a la vista lo necesario para publicar. */
+const Section: React.FC<{ icon: React.ReactNode; title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ icon, title, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-tech-border/60 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-tech-border/20 transition-colors">
+        {icon}
+        <span className="flex-1 text-xs font-bold text-tech-text">{title}</span>
+        <Icons.ChevronDown size={14} className={`text-tech-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3">{children}</div>}
+    </div>
+  );
+};
 
 /** Buscador de productos del catálogo (mismo buscador que el chat). */
 const ProductSearch: React.FC<{ adminToken: string; onPick: (p: ChatProductCard) => void }> = ({ adminToken, onPick }) => {
@@ -118,7 +134,7 @@ const fallbackPrompts = (slot: ContentSlot) => {
       + `Escena de garaje o carretera de montaña con buena luz${slot.topic ? `, enfoque: ${slot.topic}` : ''}. `
       + 'Conserva exactamente la forma, los colores y los logotipos del producto. Sin texto.',
     video: `Vídeo vertical 9:16 de 8 segundos para TikTok a partir de la foto de ${what}. `
-      + 'Plano de detalle que se abre a la moto en ambiente motero, movimiento de cámara suave, luz cálida y sonido ambiente realista. '
+      + 'Plano de detalle que se abre a la moto en ambiente motero, movimiento de cámara suave, luz cálida y música suave, sin sonido de motor ni de escape. '
       + 'Sin texto en pantalla y sin cambiar el producto.',
   };
 };
@@ -169,14 +185,11 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
   const btn = 'bg-tech-border hover:bg-tech-border/70 text-tech-text px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5';
 
   return (
-    <div className="border border-sky-500/30 bg-sky-500/5 rounded-xl p-4 space-y-4">
-      <div>
-        <p className="text-xs font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5"><Icons.Wand2 size={14} /> Con tu plan de Gemini</p>
-        <p className="text-[11px] text-tech-muted mt-1">
-          1. Guarda la foto del producto. 2. Copia el prompt y pégalo en Gemini (imagen) o en Flow (vídeo) adjuntando la foto.
-          3. Descarga el resultado y súbelo aquí.
-        </p>
-      </div>
+    <Section icon={<Icons.Wand2 size={14} className="text-sky-300" />} title={`Con tu plan de Gemini${slot.final_media?.length ? ` · ${slot.final_media.length} archivo${slot.final_media.length > 1 ? 's' : ''} final${slot.final_media.length > 1 ? 'es' : ''}` : ''}`}>
+      <p className="text-[11px] text-tech-muted">
+        1. Guarda la foto del producto. 2. Copia el prompt y pégalo en Gemini (imagen) o en Flow (vídeo) adjuntando la foto.
+        3. Descarga el resultado y súbelo aquí.
+      </p>
 
       <div className="flex gap-2 flex-wrap">
         {photo && <a href={displayImage(photo, 800)} target="_blank" rel="noreferrer" download className={btn}><Icons.Download size={13} /> Foto del producto</a>}
@@ -226,7 +239,7 @@ const ManualStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
           {uploading ? 'Subiendo…' : 'Subir imagen o vídeo final'}
         </button>
       </div>
-    </div>
+    </Section>
   );
 };
 
@@ -276,8 +289,7 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
 
   if (!sources.length) return null;
   return (
-    <div className="border border-purple-500/30 bg-purple-500/5 rounded-xl p-4 space-y-3">
-      <p className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5"><Icons.Clapperboard size={14} /> Vídeo con IA (Hailuo o Veo)</p>
+    <Section icon={<Icons.Clapperboard size={14} className="text-purple-300" />} title={generating ? 'Vídeo con IA · generando…' : 'Vídeo con IA (Hailuo o Veo)'} defaultOpen={generating || slot.video_status === 'error'}>
       {slot.video_status === 'error' && slot.video_error && (
         <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.video_error}</div>
       )}
@@ -301,7 +313,7 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} maxLength={2000} className={`${inputClass} text-xs resize-y`} />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <select value={model} onChange={(e) => setModel(e.target.value)} className={`${inputClass} w-auto`}>
+            <select value={model} onChange={(e) => setModel(e.target.value)} className={`${inputClass} sm:w-auto`}>
               {VIDEO_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
             <button onClick={start} disabled={busy || !source || prompt.trim().length < 10}
@@ -309,10 +321,10 @@ const VideoStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChanged: 
               {busy ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />} Generar vídeo de {opt.seconds} s
             </button>
           </div>
-          <p className="text-[10px] text-tech-muted">Coste: {opt.cost}. Hailuo no lleva sonido (pon música en TikTok); Veo sí.</p>
+          <p className="text-[10px] text-tech-muted">Coste: {opt.cost}. Hailuo no lleva sonido (pon música en TikTok); Veo sí, pero nunca de motor ni de escape.</p>
         </>
       )}
-    </div>
+    </Section>
   );
 };
 
@@ -352,16 +364,13 @@ const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChang
   };
 
   return (
-    <div className="border border-pink-500/30 bg-pink-500/5 rounded-xl p-4 space-y-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <p className="flex-1 text-xs font-black uppercase tracking-wider text-pink-300 flex items-center gap-1.5"><Icons.Instagram size={14} /> Versión Instagram (4:5)</p>
-        {has && !generating && (
-          <>
-            <button onClick={() => create(false)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.RefreshCw size={11} /> Rehacer imágenes</button>
-            <button onClick={() => create(true)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.Sparkles size={11} /> Rehacer todo</button>
-          </>
-        )}
-      </div>
+    <Section icon={<Icons.Instagram size={14} className="text-pink-300" />} title={`Versión Instagram (4:5)${generating ? ' · preparando…' : has ? ' · lista' : ''}`} defaultOpen={generating}>
+      {has && !generating && (
+        <div className="flex gap-4">
+          <button onClick={() => create(false)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.RefreshCw size={11} /> Rehacer imágenes</button>
+          <button onClick={() => create(true)} disabled={busy} className="text-pink-300 text-[10px] font-bold flex items-center gap-1 disabled:opacity-50"><Icons.Sparkles size={11} /> Rehacer todo</button>
+        </div>
+      )}
       {slot.ig_status === 'error' && slot.ig_error && <div className="rounded-lg p-2 text-xs border bg-red-950/30 border-red-800/50 text-red-400">{slot.ig_error}</div>}
       {generating ? (
         <p className="text-xs text-pink-200 flex items-center gap-2"><Icons.Loader2 className="w-4 h-4 animate-spin" /> Adaptando imágenes y texto… (unos segundos)</p>
@@ -375,9 +384,9 @@ const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChang
         </>
       ) : (
         <>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {slot.ig_media!.map((url, i) => (
-              <a key={url} href={url} target="_blank" rel="noreferrer" download className="relative group">
+              <a key={url} href={url} target="_blank" rel="noreferrer" download className="relative group shrink-0">
                 <img src={url} alt={`Instagram ${i + 1}`} className="w-24 h-[7.5rem] object-cover rounded-lg border border-tech-border" />
                 <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
               </a>
@@ -399,7 +408,7 @@ const InstagramStudio: React.FC<{ slot: ContentSlot; adminToken: string; onChang
           )}
         </>
       )}
-    </div>
+    </Section>
   );
 };
 
@@ -432,7 +441,6 @@ const SlidesEditor: React.FC<{ slot: ContentSlot; adminToken: string; onChanged:
   const set = (i: number, k: 'title' | 'text', v: string) => setSlides((arr) => arr.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   return (
     <div className="space-y-2">
-      <label className={labelClass}>Texto de cada diapositiva</label>
       {slides.map((sl, i) => (
         <div key={i} className="flex gap-2 items-start bg-tech-carbon border border-tech-border rounded-lg p-2">
           <span className="text-[10px] font-black text-tech-muted w-5 pt-2">{i + 1}</span>
@@ -540,7 +548,6 @@ const SlotEditor: React.FC<{
   const generating = slot.status === 'generating';
   const settingsDirty = when !== toLocalInput(slot.scheduled_at) || format !== slot.format
     || topic !== (slot.topic || '') || angle !== (slot.angle || '') || (product?.sku || null) !== (slot.product_sku || null);
-  const textDirty = copy !== (slot.copy || '') || hashtags !== (slot.hashtags || '') || script !== (slot.script || '');
 
   const patch = async (body: Record<string, unknown>, ok: string) => {
     setSaving(true);
@@ -595,15 +602,16 @@ const SlotEditor: React.FC<{
 
   const hasContent = !!(slot.copy || slot.media_urls?.length);
 
-  return (
-    <div className="px-5 pb-5 border-t border-tech-border/50 pt-4 space-y-4">
-      {slot.error && (
-        <div className={`rounded-lg p-3 text-xs border ${slot.status === 'ready' ? 'bg-amber-950/30 border-amber-800/50 text-amber-400' : 'bg-red-950/30 border-red-800/50 text-red-400'}`}>
-          {slot.error}
-        </div>
-      )}
+  const saveTextButton = (
+    <button onClick={() => patch({ copy, hashtags, script }, 'Texto guardado')} disabled={saving}
+      className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
+      <Icons.Save size={13} /> Guardar texto
+    </button>
+  );
 
-      {/* Ajustes: cuándo, formato, producto y enfoque */}
+  // Cuándo, formato, producto, tipo e idea, con el botón de generar.
+  const settings = (
+    <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Fecha y hora</label>
@@ -623,130 +631,150 @@ const SlotEditor: React.FC<{
             <div className="flex items-center gap-2 bg-tech-carbon border border-tech-border rounded-lg p-2">
               {product.image ? <img src={displayImage(product.image)} alt="" className="w-10 h-10 object-cover rounded" /> : <Icons.Package className="w-5 h-5 text-tech-muted" />}
               <span className="flex-1 min-w-0 text-xs text-tech-text truncate">{product.name} <span className="text-tech-muted">· {product.sku}</span></span>
-              {!generating && <button onClick={() => setProduct(null)} className="text-tech-muted hover:text-red-400" aria-label="Quitar producto"><Icons.X size={14} /></button>}
+              {!generating && <button onClick={() => setProduct(null)} className="text-tech-muted hover:text-red-400 p-1" aria-label="Quitar producto"><Icons.X size={14} /></button>}
             </div>
           ) : (
             <>
               {!generating && <ProductSearch adminToken={adminToken} onPick={(p) => setProduct({ sku: p.sku, name: p.name, image: p.image })} />}
-              <p className="text-[10px] text-tech-muted mt-1">Si no eliges ninguno, se sortea una marca (de todas, sin repetir las de las últimas 10 publicaciones) y un producto suyo con stock, fotos y de 30 € o más que no se haya publicado en 120 días.</p>
+              <p className="text-[10px] text-tech-muted mt-1">Si no eliges ninguno, se sortea uno con stock, fotos y de 30 € o más, sin repetir marca ni producto recientes.</p>
             </>
           )}
         </div>}
         {!slot.campaign && <div className="md:col-span-2">
           <label className={labelClass}>Tipo de publicación</label>
           <select value={angle} onChange={(e) => setAngle(e.target.value)} className={inputClass} disabled={generating}>
-            <option value="">Automático (rota para no repetir siempre la promo)</option>
+            <option value="">Automático (rota para no repetir la promo)</option>
             {Object.entries(ANGLE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <p className="text-[10px] text-tech-muted mt-1">«Para tu moto» solo se usa si el producto tiene motos compatibles en el catálogo; si no, se elige otro. La IA solo usa datos reales del producto y de la tienda.</p>
+          <p className="text-[10px] text-tech-muted mt-1">«Para tu moto» solo si el producto tiene motos compatibles. La IA usa solo datos reales del producto y de la tienda.</p>
         </div>}
         <div className="md:col-span-2">
           <label className={labelClass}>{slot.campaign ? 'Tema de la publicación de marca' : 'Idea concreta (opcional)'}</label>
           <input value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={500} disabled={generating}
-            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: look de invierno, salida de fin de semana, montaje en casa…'} className={inputClass} />
+            placeholder={slot.campaign ? 'Ej.: tenemos un chat con asesores expertos de verdad' : 'Ej.: look de invierno, salida de fin de semana…'} className={inputClass} />
         </div>
       </div>
-
       <div className="flex gap-2 flex-wrap items-center">
         {settingsDirty && !generating && (
           <button onClick={saveSettings} disabled={saving}
-            className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
+            className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
             <Icons.Save size={13} /> Guardar cambios
           </button>
         )}
         {slot.status !== 'published' && (
           <button onClick={generate} disabled={generating || saving}
-            className="bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-4 py-2 rounded-lg text-xs font-black uppercase italic tracking-wider flex items-center gap-2">
+            className="flex-1 sm:flex-none justify-center bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-4 py-2.5 rounded-lg text-xs font-black uppercase italic tracking-wider flex items-center gap-2">
             {generating ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : hasContent ? <Icons.RefreshCw size={13} /> : <Icons.Sparkles size={14} />}
             {generating ? 'Generando… (1-2 min)' : hasContent ? 'Regenerar con IA' : 'Generar con IA'}
           </button>
         )}
       </div>
+    </>
+  );
 
-      {hasContent && !generating && <TikTokProductLink slot={slot} onCopy={copyToClipboard} />}
+  const showPublish = hasContent && !generating;
+  const vertical = slot.campaign || !!slot.slides?.[0]?.kind;
 
-      {/* Contenido generado */}
-      {hasContent && !generating && (
-        <div className="space-y-4 border-t border-tech-border/30 pt-4">
+  return (
+    <div className="px-3 sm:px-5 pb-4 border-t border-tech-border/50 pt-3 space-y-3">
+      {slot.error && (
+        <div className={`rounded-lg p-3 text-xs border ${slot.status === 'ready' ? 'bg-amber-950/30 border-amber-800/50 text-amber-400' : 'bg-red-950/30 border-red-800/50 text-red-400'}`}>
+          {slot.error}
+        </div>
+      )}
+
+      {/* Sin contenido (o generando): los ajustes a la vista para preparar la publicación. */}
+      {!showPublish && settings}
+
+      {/* Con contenido: lo necesario para publicar arriba y lo demás en apartados plegables. */}
+      {showPublish && (
+        <>
           {!!slot.media_urls?.length && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className={labelClass}>Imágenes promocionales</label>
+                <label className={labelClass}>Imágenes · toca para descargar</label>
                 {!slot.campaign && (
                   <button onClick={() => action('/recompose', 'POST', 'Logos actualizados')} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1">
                     <Icons.BadgeCheck size={11} /> Rehacer con logos
                   </button>
                 )}
               </div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 overflow-x-auto snap-x pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap">
                 {slot.media_urls.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group">
-                    <img src={displayImage(url)} alt={`Imagen ${i + 1}`} className={`${slot.campaign || slot.slides?.[0]?.kind ? 'w-24 h-[10.6rem]' : 'w-28 h-28'} object-cover rounded-lg border border-tech-border`} />
+                  <a key={i} href={url} target="_blank" rel="noreferrer" download className="relative group shrink-0 snap-start">
+                    <img src={displayImage(url)} alt={`Imagen ${i + 1}`} className={`${vertical ? 'w-28 h-[12.4rem]' : 'w-32 h-32'} object-cover rounded-lg border border-tech-border`} />
                     <span className="absolute bottom-1 right-1 bg-black/70 rounded p-1 text-white opacity-80 group-hover:opacity-100"><Icons.Download size={12} /></span>
                   </a>
                 ))}
               </div>
             </div>
           )}
-          {(slot.campaign || !!slot.slides?.[0]?.kind) && <SlidesEditor slot={slot} adminToken={adminToken} onChanged={onChanged} />}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className={labelClass}>Texto de la publicación</label>
-              <button onClick={() => copyToClipboard(`${copy}\n\n${hashtags}`.trim())} className="text-tech-yellow text-[10px] font-bold flex items-center gap-1"><Icons.Copy size={11} /> Copiar texto + hashtags</button>
-            </div>
-            <textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={4} className={`${inputClass} resize-y`} />
-          </div>
-          <div>
-            <label className={labelClass}>Hashtags</label>
-            <input value={hashtags} onChange={(e) => setHashtags(e.target.value)} className={`${inputClass} text-tech-yellow`} />
-          </div>
-          <div>
-            <label className={labelClass}>Guion</label>
-            <textarea value={script} onChange={(e) => setScript(e.target.value)} rows={6} className={`${inputClass} text-xs resize-y`} />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {textDirty && (
-              <button onClick={() => patch({ copy, hashtags, script }, 'Texto guardado')} disabled={saving}
-                className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50">
-                <Icons.Save size={13} /> Guardar texto
-              </button>
-            )}
-            {slot.status !== 'published' && (
-              <button onClick={() => action('/published', 'POST', 'Marcado como publicado')}
-                className="bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-400 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2">
-                <Icons.Check size={13} /> Marcar publicado
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
-      {hasContent && !generating && (
-        <InstagramStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+          <div className="space-y-2">
+            <label className={labelClass}>Texto de la publicación</label>
+            <textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={5} className={`${inputClass} resize-y`} />
+            <input value={hashtags} onChange={(e) => setHashtags(e.target.value)} aria-label="Hashtags" className={`${inputClass} text-tech-yellow text-xs`} />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => copyToClipboard(`${copy}\n\n${hashtags}`.trim())}
+                className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                <Icons.Copy size={13} /> Copiar texto
+              </button>
+              {slot.status !== 'published' ? (
+                <button onClick={() => action('/published', 'POST', 'Marcado como publicado')}
+                  className="bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-400 px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5">
+                  <Icons.Check size={13} /> Marcar publicado
+                </button>
+              ) : (
+                <span className="text-tech-yellow text-xs font-bold flex items-center justify-center gap-1.5"><Icons.CheckCircle2 size={13} /> Publicado</span>
+              )}
+            </div>
+            {(copy !== (slot.copy || '') || hashtags !== (slot.hashtags || '')) && saveTextButton}
+          </div>
+
+          <TikTokProductLink slot={slot} onCopy={copyToClipboard} />
+
+          <div className="space-y-2 pt-1">
+            <Section icon={<Icons.SlidersHorizontal size={14} className="text-tech-muted" />}
+              title={`Ajustes y regenerar${!slot.campaign && slot.angle && ANGLE_LABEL[slot.angle] ? ` · ${ANGLE_LABEL[slot.angle]}` : ''}`}>
+              {settings}
+            </Section>
+            {vertical && (
+              <Section icon={<Icons.Layers size={14} className="text-tech-muted" />} title="Texto de las diapositivas">
+                <SlidesEditor slot={slot} adminToken={adminToken} onChanged={onChanged} />
+              </Section>
+            )}
+            {(slot.script || script) && (
+              <Section icon={<Icons.ScrollText size={14} className="text-tech-muted" />} title="Guion">
+                <textarea value={script} onChange={(e) => setScript(e.target.value)} rows={8} className={`${inputClass} text-xs resize-y`} />
+                {script !== (slot.script || '') && saveTextButton}
+              </Section>
+            )}
+            <InstagramStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+          </div>
+        </>
       )}
 
       {(hasContent || slot.product_sku) && !generating && (
-        <VideoStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+        <div className="space-y-2">
+          <VideoStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
+          {!slot.campaign && <ManualStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />}
+        </div>
       )}
 
-      {(hasContent || slot.product_sku) && !generating && !slot.campaign && (
-        <ManualStudio slot={slot} adminToken={adminToken} onChanged={onChanged} />
-      )}
-
-      <div className="flex justify-end gap-4 pt-2 border-t border-tech-border/30">
+      <div className="flex justify-end gap-5 pt-2 border-t border-tech-border/30">
         {(slot.status === 'draft' || slot.status === 'ready') && (
-          <button onClick={() => patch({ status: 'skipped' }, 'Publicación omitida')} className="text-tech-muted hover:text-tech-text text-xs font-bold flex items-center gap-1">
+          <button onClick={() => patch({ status: 'skipped' }, 'Publicación omitida')} className="text-tech-muted hover:text-tech-text text-xs font-bold flex items-center gap-1 py-1">
             <Icons.SkipForward size={12} /> Omitir
           </button>
         )}
         {slot.status === 'skipped' && (
-          <button onClick={() => patch({ status: hasContent ? 'ready' : 'draft' }, 'Publicación recuperada')} className="text-tech-muted hover:text-tech-text text-xs font-bold flex items-center gap-1">
+          <button onClick={() => patch({ status: hasContent ? 'ready' : 'draft' }, 'Publicación recuperada')} className="text-tech-muted hover:text-tech-text text-xs font-bold flex items-center gap-1 py-1">
             <Icons.Undo2 size={12} /> Recuperar
           </button>
         )}
         <button
           onClick={() => { if (window.confirm('¿Eliminar esta publicación del calendario?')) action('', 'DELETE', 'Publicación eliminada'); }}
-          className="text-red-400 hover:text-red-300 text-xs font-bold flex items-center gap-1">
+          className="text-red-400 hover:text-red-300 text-xs font-bold flex items-center gap-1 py-1">
           <Icons.Trash2 size={12} /> Eliminar
         </button>
       </div>
@@ -980,32 +1008,37 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2 flex-wrap">
-        <button onClick={() => { setHistory((v) => !v); setExpandedId(null); }}
-          className={`px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${history ? 'bg-tech-yellow text-tech-text' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
-          {history ? <><Icons.CalendarDays size={14} /> Ver calendario</> : <><Icons.History size={14} /> Historial</>}
+      {/* Barra: en el móvil, iconos; las etiquetas salen en pantallas anchas. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex bg-tech-border/50 rounded-xl p-1">
+          {[{ v: false, label: 'Calendario', icon: <Icons.CalendarDays size={13} /> }, { v: true, label: 'Historial', icon: <Icons.History size={13} /> }].map((o) => (
+            <button key={o.label} onClick={() => { if (history !== o.v) { setHistory(o.v); setExpandedId(null); } }}
+              className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ${history === o.v ? 'bg-tech-yellow text-tech-text' : 'text-tech-muted hover:text-tech-text'}`}>
+              {o.icon} {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <button onClick={() => setShowNew((v) => !v)} title="Nueva publicación" aria-label="Nueva publicación"
+          className={`px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showNew ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
+          <Icons.Plus size={15} /> <span className="hidden md:inline">Nueva publicación</span>
         </button>
-        <button onClick={() => setShowLogos((v) => !v)}
-          className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-          <Icons.BadgeCheck size={14} /> Logos de marcas
+        <button onClick={() => setShowLogos((v) => !v)} title="Logos de marcas" aria-label="Logos de marcas"
+          className={`px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2 ${showLogos ? 'bg-tech-yellow/20 text-tech-yellow' : 'bg-tech-border hover:bg-tech-border/70 text-tech-text'}`}>
+          <Icons.BadgeCheck size={15} /> <span className="hidden md:inline">Logos de marcas</span>
         </button>
-        <button onClick={() => setShowNew((v) => !v)}
-          className="bg-tech-border hover:bg-tech-border/70 text-tech-text px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
-          <Icons.Plus size={14} /> Nueva publicación
-        </button>
-        <button
-          onClick={handleAutoSchedule}
-          disabled={autoScheduling}
-          className="bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-5 py-3 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-orange-950/20"
-        >
-          {autoScheduling ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.CalendarPlus size={14} />}
-          Rellenar próximos 7 días
-        </button>
-        {pendingCount > 0 && (
+        {!history && (
+          <button onClick={handleAutoSchedule} disabled={autoScheduling} title="Rellenar próximos 7 días" aria-label="Rellenar próximos 7 días"
+            className="bg-tech-border hover:bg-tech-border/70 disabled:opacity-50 text-tech-text px-3 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+            {autoScheduling ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.CalendarPlus size={15} />}
+            <span className="hidden md:inline">Rellenar 7 días</span>
+          </button>
+        )}
+        {pendingCount > 0 && !history && (
           <button
             onClick={handleGenerateAll}
             disabled={generatingAll || anyGenerating}
-            className="bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-5 py-3 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-orange-950/20"
+            className="w-full md:w-auto justify-center bg-tech-yellow hover:bg-orange-600 disabled:opacity-50 text-tech-text px-5 py-3 rounded-xl text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-orange-950/20"
           >
             {generatingAll || anyGenerating ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Sparkles size={14} />}
             Generar pendientes ({pendingCount})
@@ -1066,27 +1099,29 @@ const SocialContentTab: React.FC<SocialContentTabProps> = ({ adminToken, initial
               <div key={slot.id} className={`bg-tech-card border rounded-xl overflow-hidden ${expanded ? 'border-tech-yellow/40' : 'border-tech-border'} ${slot.status === 'skipped' ? 'opacity-60' : ''}`}>
                 <button
                   onClick={() => setExpandedId(expanded ? null : slot.id)}
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-tech-border/20 transition-colors"
+                  className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left hover:bg-tech-border/20 transition-colors"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="text-lg font-black text-tech-text w-14 shrink-0">{date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
-                    {slot.final_media?.length ? <Icons.CheckCircle2 size={14} className="text-sky-400 shrink-0" /> : null}
+                  <div className="relative shrink-0">
                     {(slot.media_urls?.[0] || slot.product_image)
-                      ? <img src={displayImage(slot.media_urls?.[0] || slot.product_image)} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
-                      : <div className="w-10 h-10 rounded bg-tech-border/50 shrink-0 grid place-items-center"><Icons.Image size={14} className="text-tech-muted" /></div>}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-black uppercase tracking-wider text-tech-text">{FORMAT_LABEL[slot.format] || slot.format}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${status.className}`}>{status.label}</span>
-                        {!slot.campaign && slot.angle && ANGLE_LABEL[slot.angle] && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-tech-border/60 text-tech-muted">{ANGLE_LABEL[slot.angle]}</span>
-                        )}
-                        {slot.error && slot.status === 'draft' && <Icons.AlertTriangle size={12} className="text-red-400" />}
-                      </div>
-                      <p className="text-xs text-tech-muted truncate mt-0.5">
-                        {slot.campaign ? `De marca · ${slot.topic || ''}` : (slot.product_name || slot.topic || 'Producto automático (cualquier marca)')}
-                      </p>
+                      ? <img src={displayImage(slot.media_urls?.[0] || slot.product_image)} alt="" className="w-12 h-12 object-cover rounded-lg" />
+                      : <div className="w-12 h-12 rounded-lg bg-tech-border/50 grid place-items-center"><Icons.Image size={15} className="text-tech-muted" /></div>}
+                    {!!slot.final_media?.length && (
+                      <Icons.CheckCircle2 size={15} className="absolute -top-1 -right-1 text-sky-400 bg-tech-card rounded-full" aria-label="Con archivo final" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-black text-tech-text shrink-0">{date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-[11px] text-tech-muted truncate">
+                        {FORMAT_LABEL[slot.format] || slot.format}
+                        {slot.campaign ? ' · De marca' : slot.angle && ANGLE_LABEL[slot.angle] ? ` · ${ANGLE_LABEL[slot.angle]}` : ''}
+                      </span>
+                      {slot.error && slot.status === 'draft' && <Icons.AlertTriangle size={12} className="text-red-400 shrink-0" />}
+                      <span className={`ml-auto shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${status.className}`}>{status.label}</span>
                     </div>
+                    <p className="text-xs text-tech-text/80 truncate mt-0.5">
+                      {slot.campaign ? slot.topic || 'Publicación de marca' : (slot.product_name || slot.topic || 'Producto automático')}
+                    </p>
                   </div>
                   <Icons.ChevronDown className={`w-4 h-4 shrink-0 text-tech-muted transition-transform ${expanded ? 'rotate-180' : ''}`} />
                 </button>
