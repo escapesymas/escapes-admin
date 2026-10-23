@@ -3,6 +3,7 @@ import * as Icons from 'lucide-react';
 import { AttributesManager } from './AttributesManager';
 import { TaxonomiesTab } from './TaxonomiesTab';
 import MissingImagesPanel from './MissingImagesPanel';
+import DescriptionsPanel from './DescriptionsPanel';
 import { formatPrice } from '../../utils/format';
 import { displayImage } from '../../utils/image';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -87,7 +88,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   adminToken,
   imagesVersion = 0,
 }) => {
-  const [subTab, setSubTab] = useState<'catalog' | 'attributes' | 'taxonomies' | 'images'>('catalog');
+  const [subTab, setSubTab] = useState<'catalog' | 'attributes' | 'taxonomies' | 'images' | 'descriptions'>('catalog');
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -326,6 +327,9 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
         <button onClick={() => setSubTab('images')} className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg transition-all ${subTab === 'images' ? 'bg-tech-yellow text-black' : 'text-tech-muted hover:text-tech-text'}`}>
           <Icons.ImageOff className="w-4 h-4 inline mr-2"/> Sin imagen
         </button>
+        <button onClick={() => setSubTab('descriptions')} className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg transition-all ${subTab === 'descriptions' ? 'bg-tech-yellow text-black' : 'text-tech-muted hover:text-tech-text'}`}>
+          <Icons.FileText className="w-4 h-4 inline mr-2"/> Descripciones
+        </button>
       </div>
 
       {subTab === 'images' && (
@@ -335,6 +339,8 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
           onOpenProduct={(id) => { setSelectedDetailProductId(id); setShowProductDetail(true); }}
         />
       )}
+
+      {subTab === 'descriptions' && <DescriptionsPanel adminToken={adminToken} />}
 
       {subTab === 'attributes' && <AttributesManager userId={userId} adminEmail={adminEmail} adminToken={adminToken} />}
       {subTab === 'taxonomies' && (
