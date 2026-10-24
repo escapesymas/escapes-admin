@@ -8,6 +8,8 @@ interface Status {
     fichas_traducidas: number; fichas_pendientes: number; ultimos_10_min: number; ultima: string | null;
   };
   recent: { en: string; es: string; translated_at: string }[];
+  generated?: { total: number; hechas: number; pendientes: number; descartadas: number; pendientes_con_stock: number; ultimos_10_min: number; ultima: string | null };
+  generatedRecent?: { name: string; texto: string; generated_at: string }[];
   lastRun: { finishedAt?: string; status: string; filled?: number; refreshed?: number; translated?: number; english?: number; error?: string } | null;
 }
 
@@ -16,9 +18,18 @@ const n = (v: number | undefined) => (v ?? 0).toLocaleString('es-ES');
 
 interface Props { adminToken: string }
 
+/** Tiempo que falta al ritmo de los últimos 10 minutos. */
+const etaOf = (pending: number, last10: number) => {
+  const perMin = last10 / 10;
+  if (!pending || perMin <= 0) return null;
+  const m = Math.ceil(pending / perMin);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+};
+
 /**
- * Descripciones de producto: las del fabricante que se copian cada día y la traducción de las que llegan en
- * inglés (va sola en el servidor; aquí solo se mira cómo va). Se actualiza cada 20 s.
+ * Descripciones de producto: las del fabricante que se copian cada día, la traducción de las que llegan en
+ * inglés y las que se montan con los datos del producto (todo va solo en el servidor; aquí solo se mira cómo
+ * va). Se actualiza cada 20 s.
  */
 const DescriptionsPanel: React.FC<Props> = ({ adminToken }) => {
   const [data, setData] = useState<Status | null>(null);
@@ -107,6 +118,56 @@ const DescriptionsPanel: React.FC<Props> = ({ adminToken }) => {
           {q.ultima && <div className="text-[10px] text-tech-muted">Última traducción: {new Date(q.ultima).toLocaleString('es-ES')}</div>}
         </div>
       )}
+
+      {data?.generated && data.generated.total > 0 && (() => {
+        const g = data.generated;
+        const gPct = Math.round((g.hechas / g.total) * 100);
+        const gWorking = g.pendientes > 0 && g.ultimos_10_min > 0;
+        const gEta = etaOf(g.pendientes, g.ultimos_10_min);
+        return (
+          <div className="bg-tech-card border border-tech-border rounded-2xl p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-tech-text flex items-center gap-2">
+                <Icons.Sparkles size={16} className="text-tech-yellow" /> Descripciones con los datos del producto
+              </h3>
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border ${gWorking ? 'bg-green-950/20 text-green-400 border-green-900/30' : g.pendientes ? 'bg-yellow-950/20 text-yellow-400 border-yellow-900/30' : 'bg-tech-card text-tech-muted border-tech-border'}`}>
+                {gWorking ? 'Escribiendo' : g.pendientes ? 'En espera' : 'Terminado'}
+              </span>
+            </div>
+            <p className="text-[11px] text-tech-muted">Para las fichas que el fabricante no describe: solo con su categoría, medidas, material, piezas del kit… Primero las que tienen stock.</p>
+            <div className="h-3 bg-[#1a1b1e] rounded-full overflow-hidden border border-tech-border">
+              <div className="h-full bg-tech-yellow transition-all" style={{ width: `${gPct}%` }} />
+            </div>
+            <div className="flex flex-wrap justify-between gap-2 text-[11px] text-[#cbd5e1]">
+              <span><b className="text-tech-text">{gPct}%</b> · {n(g.hechas)} de {n(g.total)} fichas</span>
+              <span>{gEta ? `Faltan unos ${gEta}` : g.pendientes ? 'Calculando…' : ''}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { label: 'Escritas', value: g.hechas },
+                { label: 'Pendientes con stock', value: g.pendientes_con_stock },
+                { label: 'Por minuto', value: Math.round(g.ultimos_10_min / 10) },
+                { label: 'Descartadas', value: g.descartadas, hint: 'Fallaron 3 veces (decían algo que no está en los datos): se quedan sin descripción.' },
+              ].map((c) => (
+                <div key={c.label} title={c.hint} className="bg-[#1a1b1e] border border-tech-border rounded-xl px-3 py-2">
+                  <div className="text-[9px] uppercase font-black tracking-widest text-tech-muted">{c.label}</div>
+                  <div className="text-sm font-black text-tech-text">{n(c.value)}</div>
+                </div>
+              ))}
+            </div>
+            {!!data.generatedRecent?.length && (
+              <div className="space-y-2 pt-1">
+                {data.generatedRecent.map((r) => (
+                  <div key={r.generated_at + r.name} className="border-t border-tech-border pt-2 text-[11px]">
+                    <div className="font-black text-tech-text">{r.name}</div>
+                    <div className="text-[#cbd5e1]">{r.texto}…</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {p && (
         <div className="bg-tech-card border border-tech-border rounded-2xl p-5 space-y-3">
