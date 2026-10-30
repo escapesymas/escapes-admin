@@ -108,9 +108,7 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
         return acc + item.price_cents * qty;
       }
       if (typeof item.price === 'number') {
-        // If price is in euros (e.g. 12.95), convert to cents
-        const valInCents = item.price < 1000 ? Math.round(item.price * 100) : item.price;
-        return acc + valInCents * qty;
+        return acc + Math.round(item.price * 100) * qty;
       }
       return acc;
     }, 0));
@@ -449,8 +447,11 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {selectedCart.items && selectedCart.items.map((item, idx) => {
                   const qty = item.quantity || 1;
-                  const rawPrice = item.price_cents ?? item.price ?? 0;
-                  const itemCents = rawPrice < 1000 ? Math.round(rawPrice * 100) : rawPrice;
+                  const itemCents = typeof item.price_cents === 'number'
+                    ? item.price_cents
+                    : typeof item.price === 'number'
+                      ? Math.round(item.price * 100)
+                      : 0;
                   const img = item.image_url || item.image;
 
                   return (
