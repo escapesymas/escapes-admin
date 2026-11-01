@@ -13,6 +13,7 @@ interface AdminLayoutProps {
   pendingReviewsCount?: number;
   unreadNotificationsCount?: number;
   chatPendingCount?: number;
+  onlineUsersCount?: number;
   /** Asesor: solo el chat. */
   isAdvisor?: boolean;
 }
@@ -54,6 +55,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   pendingReviewsCount = 0,
   unreadNotificationsCount = 0,
   chatPendingCount = 0,
+  onlineUsersCount = 0,
   isAdvisor = false
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -78,6 +80,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   const allNavItems = [
     { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
+    {
+      id: 'analytics',
+      label: 'Estadísticas Web',
+      icon: Icons.Activity,
+      badge: onlineUsersCount > 0 ? `${onlineUsersCount} online` : undefined,
+    },
     { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
     { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
     { id: 'advisors', label: 'Asesores', icon: Icons.HandCoins },

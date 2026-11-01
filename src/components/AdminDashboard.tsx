@@ -19,6 +19,7 @@ import { AgentNotifications } from './chat/AgentNotifications';
 import { AgentLegalGate } from './chat/AgentLegalGate';
 import { AdminLayout } from './layout/AdminLayout';
 import { DashboardTab } from './tabs/DashboardTab';
+import { AnalyticsTab } from './tabs/AnalyticsTab';
 import OrderCreationModal from './OrderCreationModal';
 import RefundRequestsSection from './RefundRequestsSection';
 import { getUnreadCount, refreshSubscription } from '../utils/pushNotificationManager';
@@ -33,7 +34,7 @@ import type { Order, Product, User, Cart, CartItem, OrderNote, OrderItem, AdminS
 
 /** Último módulo abierto: al recargar (o reabrir la app de inicio del iPhone) se vuelve a él, no al Dashboard. */
 const TAB_KEY = 'escapes-admin-tab';
-const KNOWN_TABS = ['stats', 'orders', 'products', 'users', 'carts', 'coupons', 'shipping', 'seo', 'sync', 'margins',
+const KNOWN_TABS = ['stats', 'analytics', 'orders', 'products', 'users', 'carts', 'coupons', 'shipping', 'seo', 'sync', 'margins',
   'notifications', 'chat', 'advisors', 'accounting', 'reviews', 'social-content', 'account-security'];
 const savedTab = (isAdvisor: boolean): string => {
   let tab: string | null = null;
@@ -53,6 +54,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const [activeTab, setActiveTab] = useState(() => savedTab(isAdvisor));
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [chatPending, setChatPending] = useState(0);
+  const [onlineUsersCount, setOnlineUsersCount] = useState(0);
   const [pendingChatId, setPendingChatId] = useState<number | null>(null);
   // Pedido a abrir cuando lleguen los pedidos (enlace de un aviso: /?tab=orders&order=123).
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
@@ -135,6 +137,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
   const adminWpId = session?.user_id || session?.user?.id || session?.user?.publicMetadata?.wp_id || session?.wp_id || '';
   const adminEmail = session?.user_email || session?.user?.emailAddresses?.[0]?.emailAddress || '';
   const adminToken = session?.token || session?.jwt || '';
+
+  useEffect(() => {
+    if (isAdvisor || !adminToken) return;
+    let mounted = true;
+    const fetchOnline = async () => {
+      try {
+        const res = await fetch('/api/admin/analytics/online-count', {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted && typeof data.online5m === 'number') {
+            setOnlineUsersCount(data.online5m);
+          }
+        }
+      } catch {
+        /* silencioso si hay micro-cortes */
+      }
+    };
+    fetchOnline();
+    const interval = setInterval(fetchOnline, 20000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [adminToken, isAdvisor]);
 
   /** Abre una pestaña (y un pedido) a partir del enlace de un aviso. */
   const openAdminLink = (url: string) => {
@@ -583,6 +611,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       activeCartsCount={carts.length}
       unreadNotificationsCount={unreadNotifications}
       chatPendingCount={chatPending}
+      onlineUsersCount={onlineUsersCount}
       isAdvisor={isAdvisor}
     >
       {isAdvisor && <AgentLegalGate adminToken={adminToken} onLogout={onLogout} />}
@@ -600,6 +629,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           <div>
             <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter">
               {activeTab === 'stats' && 'Panel de Control'}
+              {activeTab === 'analytics' && 'Estadísticas Web y Tráfico en Vivo'}
               {activeTab === 'orders' && 'Historial de Pedidos'}
               {activeTab === 'products' && 'Catálogo de Productos'}
               {activeTab === 'users' && 'Usuarios Registrados'}
@@ -618,6 +648,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
             </h1>
             <p className="text-tech-muted text-xs mt-1 font-medium">
               {activeTab === 'stats' && 'Vista general del rendimiento del e-commerce.'}
+              {activeTab === 'analytics' && 'Telemetría de visitantes en tiempo real, páginas activas y analítica SEO.'}
               {activeTab === 'orders' && 'Gestiona los estados de los pagos y envíos en PostgreSQL.'}
               {activeTab === 'products' && 'Añade, edita o elimina recambios y su compatibilidad.'}
               {activeTab === 'users' && 'Lista de clientes activos y su rango de fidelización.'}
@@ -667,6 +698,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
         {/* STATS VIEW */}
         {activeTab === 'stats' && (
           <DashboardTab adminWpId={adminWpId} adminEmail={adminEmail} adminToken={adminToken} orders={orders} setSelectedOrder={setSelectedOrder} />
+        )}
+        {/* ANALYTICS TAB */}
+        {activeTab === 'analytics' && (
+          <AnalyticsTab adminToken={adminToken} onOnlineCountChange={setOnlineUsersCount} />
         )}
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
