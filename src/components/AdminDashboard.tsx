@@ -754,10 +754,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
           <UsersTab
             users={users}
             orders={orders}
+            carts={carts}
             adminWpId={adminWpId}
             adminEmail={adminEmail}
             adminToken={adminToken}
             onUserSaved={() => fetchData(true)}
+            onRefreshCarts={() => fetchData(true)}
             onSelectOrder={(order) => setSelectedOrder(order)}
             onDeleteOrder={(id) => setOrderDeletingId(id)}
             onCreateOrderForUser={(user) => {

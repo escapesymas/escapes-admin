@@ -3,15 +3,17 @@ import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import { OrderStatusBadge, DropshippingStatusBadge } from '../Badges';
 import { formatPrice } from '../../utils/format';
-import type { User, UserBilling, UserRole, Order } from '../../types/admin';
+import type { User, UserBilling, UserRole, Order, Cart } from '../../types/admin';
 
 interface UsersTabProps {
   users: User[];
   orders?: Order[];
+  carts?: Cart[];
   adminWpId: string | number;
   adminEmail: string;
   adminToken: string;
   onUserSaved: () => void;
+  onRefreshCarts?: () => void;
   onSelectOrder?: (order: Order) => void;
   onDeleteOrder?: (orderId: number) => void;
   onCreateOrderForUser?: (user: User) => void;
@@ -23,8 +25,10 @@ type SortField = 'id' | 'name' | 'orders_desc' | 'orders_asc' | 'spent_desc' | '
 export const UsersTab: React.FC<UsersTabProps> = ({ 
   users, 
   orders = [], 
+  carts = [],
   adminToken, 
   onUserSaved, 
+  onRefreshCarts,
   onSelectOrder,
   onDeleteOrder,
   onCreateOrderForUser
@@ -32,7 +36,15 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'info' | 'address' | 'orders' | 'garage'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'address' | 'orders' | 'carts' | 'garage'>('info');
+  const [localCarts, setLocalCarts] = useState<Cart[]>(carts);
+  const [sendingCartEmailId, setSendingCartEmailId] = useState<number | null>(null);
+  const [deletingCartId, setDeletingCartId] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    setLocalCarts(carts);
+  }, [carts]);
+
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState<boolean>(false);
@@ -470,6 +482,110 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     );
   }) : [];
 
+  // Obtener carritos asociados a un usuario (por user_id, wp_id o email)
+  const getUserCarts = (u: User | null): Cart[] => {
+    if (!u) return [];
+    const userEmail = (u.email || '').toLowerCase().trim();
+    return localCarts.filter(c => {
+      const cUserId = c.userId ?? (c as any).user_id;
+      if (cUserId && (cUserId === u.id || (u.wp_id && cUserId === u.wp_id) || (u.wpId && cUserId === u.wpId))) {
+        return true;
+      }
+      const cEmail = (c.userEmail || (c as any).customer_email || '').toLowerCase().trim();
+      if (userEmail && cEmail && cEmail !== 'invitado' && cEmail === userEmail) {
+        return true;
+      }
+      return false;
+    });
+  };
+
+  const userCarts = getUserCarts(selectedUser);
+
+  const getCartTotalCents = (c: Cart): number => {
+    if (typeof c.total_cents === 'number') return c.total_cents;
+    if (!c.items || !Array.isArray(c.items)) return 0;
+    return Math.round(c.items.reduce((acc, item) => {
+      const qty = item.quantity || 1;
+      if (typeof item.price_cents === 'number') {
+        return acc + item.price_cents * qty;
+      }
+      if (typeof item.price === 'number') {
+        return acc + Math.round(item.price * 100) * qty;
+      }
+      return acc;
+    }, 0));
+  };
+
+  const getCartStatus = (c: Cart): 'active' | 'abandoned' => {
+    if (c.status) return c.status;
+    if (c.isDeleted === 1 || (c as any).is_deleted === 1) return 'abandoned';
+    const dateStr = c.updatedAt || (c as any).updated_at;
+    if (!dateStr) return 'abandoned';
+    const updatedTime = new Date(dateStr).getTime();
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return updatedTime < twentyFourHoursAgo ? 'abandoned' : 'active';
+  };
+
+  const handleSendCartRecoveryEmail = async (cart: Cart) => {
+    const email = (selectedUser?.email || cart.userEmail || '').trim();
+    if (!email || email.toLowerCase() === 'invitado') {
+      showToast('No se puede enviar email: sin correo registrado para este cliente.', 'error');
+      return;
+    }
+    setSendingCartEmailId(cart.id);
+    try {
+      const res = await fetch(`/api/admin?action=send-abandoned-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cartId: cart.id,
+          email,
+          firstName: selectedUser?.firstName || cart.userFirstName || 'cliente',
+          items: cart.items
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showToast(`Email de recuperación enviado con éxito a ${email}`, 'success');
+      } else {
+        showToast(data.error || 'Error al enviar el correo de recuperación.', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión al enviar el correo.', 'error');
+    } finally {
+      setSendingCartEmailId(null);
+    }
+  };
+
+  const handleDeleteUserCart = async (cartId: number) => {
+    if (!confirm('¿Deseas eliminar este carrito de compra del usuario?')) return;
+    setDeletingCartId(cartId);
+    try {
+      const res = await fetch(`/api/admin?action=delete-cart`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cartId })
+      });
+      if (res.ok) {
+        showToast('Carrito eliminado correctamente', 'success');
+        setLocalCarts(prev => prev.filter(c => c.id !== cartId));
+        onRefreshCarts?.();
+      } else {
+        showToast('Error al eliminar el carrito', 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión al eliminar el carrito', 'error');
+    } finally {
+      setDeletingCartId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-sans">
       
@@ -616,9 +732,24 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
                   {/* Card Bottom KPI Metrics */}
                   <div className="border-t border-tech-border pt-3 mt-2 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1 text-tech-text font-mono">
-                      <Icons.ShoppingBag className="w-3.5 h-3.5 text-tech-yellow" />
-                      <span>{u.totalOrders || 0} compras</span>
+                    <div className="flex items-center gap-2 text-tech-text font-mono">
+                      <div className="flex items-center gap-1">
+                        <Icons.ShoppingBag className="w-3.5 h-3.5 text-tech-yellow" />
+                        <span>{u.totalOrders || 0} compras</span>
+                      </div>
+                      {(() => {
+                        const count = getUserCarts(u).length;
+                        if (count === 0) return null;
+                        return (
+                          <div
+                            className="flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                            title={`${count} carrito(s) guardado(s)`}
+                          >
+                            <Icons.ShoppingCart className="w-3 h-3 text-amber-400" />
+                            <span>{count}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="font-bold font-mono text-emerald-400 text-sm">
                       {spentEur} €
@@ -686,10 +817,25 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                           </span>
                         </td>
                         <td className="py-4">
-                          <span className="inline-flex items-center gap-1 bg-[#1a1b1e] border border-tech-border px-2.5 py-1 rounded-lg font-mono text-xs text-tech-text">
-                            <Icons.ShoppingBag className="w-3 h-3 text-tech-yellow" />
-                            {u.totalOrders || 0}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 bg-[#1a1b1e] border border-tech-border px-2.5 py-1 rounded-lg font-mono text-xs text-tech-text">
+                              <Icons.ShoppingBag className="w-3 h-3 text-tech-yellow" />
+                              {u.totalOrders || 0}
+                            </span>
+                            {(() => {
+                              const count = getUserCarts(u).length;
+                              if (count === 0) return null;
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-lg font-mono text-xs font-bold"
+                                  title={`${count} carrito(s) guardado(s)`}
+                                >
+                                  <Icons.ShoppingCart className="w-3 h-3" />
+                                  {count}
+                                </span>
+                              );
+                            })()}
+                          </div>
                         </td>
                         <td className="py-4 font-mono text-xs font-bold text-emerald-400">
                           {spentEur} €
@@ -871,10 +1017,11 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 <div>
                   <div className="flex border-b border-tech-border gap-3 sm:gap-6 mb-6 overflow-x-auto no-scrollbar pb-1">
                     {[
-                      { id: 'info', label: 'Información General', icon: Icons.User },
-                      { id: 'address', label: 'Dirección & Envíos', icon: Icons.MapPin },
-                      { id: 'orders', label: 'Histórico de Compras', icon: Icons.ShoppingBag },
-                      { id: 'garage', label: 'Motos Registradas (Garaje)', icon: Icons.Bike }
+                      { id: 'info', label: 'Información General', icon: Icons.User, count: null, highlight: false },
+                      { id: 'address', label: 'Dirección & Envíos', icon: Icons.MapPin, count: null, highlight: false },
+                      { id: 'orders', label: 'Histórico de Compras', icon: Icons.ShoppingBag, count: userOrders.length, highlight: false },
+                      { id: 'carts', label: 'Carritos', icon: Icons.ShoppingCart, count: userCarts.length, highlight: userCarts.length > 0 },
+                      { id: 'garage', label: 'Motos Registradas (Garaje)', icon: Icons.Bike, count: null, highlight: false }
                     ].map(tb => {
                       const Icon = tb.icon;
                       return (
@@ -889,6 +1036,15 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                         >
                           <Icon className="w-4 h-4" />
                           <span>{tb.label}</span>
+                          {typeof tb.count === 'number' && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                              tb.highlight
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                : 'bg-tech-card text-tech-muted border border-tech-border'
+                            }`}>
+                              {tb.count}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -1235,6 +1391,203 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab: Carritos del Usuario */}
+                  {activeTab === 'carts' && (
+                    <div className="bg-[#1a1b1e]/60 border border-tech-border rounded-xl p-5 text-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-tech-border pb-3 gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-tech-yellow flex items-center gap-2">
+                          <Icons.ShoppingCart className="w-4 h-4" /> Carritos Registrados ({userCarts.length})
+                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-amber-400 font-bold">
+                            Total en Carritos: {formatPrice(userCarts.reduce((acc, c) => acc + getCartTotalCents(c), 0))}
+                          </span>
+                        </div>
+                      </div>
+
+                      {userCarts.length === 0 ? (
+                        <div className="py-12 text-center text-tech-muted italic flex flex-col items-center justify-center gap-2">
+                          <div className="w-12 h-12 rounded-full bg-tech-card border border-tech-border flex items-center justify-center text-tech-muted mb-1">
+                            <Icons.ShoppingCart className="w-6 h-6 opacity-40" />
+                          </div>
+                          <span className="font-medium text-sm">Este usuario no tiene ningún carrito activo o guardado actualmente.</span>
+                          <span className="text-[11px] text-tech-muted">Los carritos con productos añadidos por el usuario se registrarán aquí con su detalle completo.</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {userCarts.map((c) => {
+                            const status = getCartStatus(c);
+                            const totalCents = getCartTotalCents(c);
+                            const dateStr = c.updatedAt || (c as any).updated_at;
+                            const items = Array.isArray(c.items) ? c.items : [];
+                            const isSendingEmail = sendingCartEmailId === c.id;
+                            const isDeleting = deletingCartId === c.id;
+
+                            return (
+                              <div
+                                key={c.id}
+                                className="bg-tech-card border border-tech-border rounded-xl p-4 shadow-lg hover:border-tech-yellow/30 transition-all space-y-3"
+                              >
+                                {/* Header del Carrito */}
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-tech-border/80 pb-3">
+                                  <div className="flex items-center gap-2.5 flex-wrap">
+                                    <span className="font-mono font-bold text-tech-text text-sm">Carrito #{c.id}</span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 ${
+                                        status === 'active'
+                                          ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/40'
+                                          : 'bg-amber-950/30 text-amber-400 border-amber-900/40'
+                                      }`}
+                                    >
+                                      {status === 'active' ? (
+                                        <>
+                                          <Icons.Clock size={10} /> Activo (&lt; 24h)
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Icons.AlertCircle size={10} /> Abandonado
+                                        </>
+                                      )}
+                                    </span>
+                                    <span className="text-[11px] text-tech-muted font-mono">
+                                      Modificado: {dateStr ? new Date(dateStr).toLocaleString('es-ES') : '—'}
+                                    </span>
+                                  </div>
+
+                                  {/* Botones de acción del carrito */}
+                                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                                    <button
+                                      onClick={() => handleSendCartRecoveryEmail(c)}
+                                      disabled={isSendingEmail}
+                                      className="px-3 py-1.5 bg-tech-yellow/15 hover:bg-tech-yellow/25 text-tech-yellow border border-tech-yellow/30 rounded-lg text-xs font-black uppercase italic tracking-wider transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                      title="Enviar correo con enlace para recuperar el carrito"
+                                    >
+                                      {isSendingEmail ? (
+                                        <Icons.Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Icons.Mail className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>Enviar Recuperación</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteUserCart(c.id)}
+                                      disabled={isDeleting}
+                                      className="p-1.5 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 rounded-lg transition-all disabled:opacity-50"
+                                      title="Eliminar este carrito"
+                                    >
+                                      {isDeleting ? (
+                                        <Icons.Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Icons.Trash2 className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Listado de Artículos */}
+                                <div className="space-y-2">
+                                  {items.length === 0 ? (
+                                    <div className="text-tech-muted italic py-2 text-center text-[11px]">
+                                      El carrito no contiene artículos válidos.
+                                    </div>
+                                  ) : (
+                                    items.map((it, idx) => {
+                                      const qty = it.quantity || 1;
+                                      const itPriceCents = typeof it.price_cents === 'number'
+                                        ? it.price_cents
+                                        : typeof it.price === 'number'
+                                          ? Math.round(it.price * 100)
+                                          : 0;
+                                      const imgRaw = it.image_url || it.image;
+                                      const img = imgRaw
+                                        ? (imgRaw.startsWith('/') ? `https://api.escapesymas.com${imgRaw}` : imgRaw)
+                                        : null;
+                                      const slug = it.slug || it.sku;
+                                      const storeUrl = slug ? `https://escapesymas.com/producto/${slug}` : null;
+
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="bg-[#1a1b1e] border border-tech-border rounded-lg p-3 flex items-center justify-between gap-3 text-xs hover:border-tech-yellow/20 transition-all"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            {img ? (
+                                              <img
+                                                src={img}
+                                                alt={it.title || it.name || 'Producto'}
+                                                className="w-12 h-12 object-cover rounded-lg border border-tech-border shrink-0 bg-tech-carbon"
+                                                loading="lazy"
+                                                onError={(e) => {
+                                                  (e.target as HTMLElement).style.display = 'none';
+                                                }}
+                                              />
+                                            ) : (
+                                              <div className="w-12 h-12 bg-tech-carbon rounded-lg border border-tech-border flex items-center justify-center text-tech-muted shrink-0">
+                                                <Icons.Package size={18} />
+                                              </div>
+                                            )}
+
+                                            <div className="min-w-0">
+                                              {storeUrl ? (
+                                                <a
+                                                  href={storeUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="font-bold text-tech-text hover:text-tech-yellow transition-colors inline-flex items-center gap-1.5 truncate max-w-full group"
+                                                  title="Abrir página del producto en la tienda"
+                                                >
+                                                  <span className="truncate">{it.title || it.name || 'Artículo'}</span>
+                                                  <Icons.ExternalLink className="w-3 h-3 text-tech-muted group-hover:text-tech-yellow shrink-0 transition-colors" />
+                                                </a>
+                                              ) : (
+                                                <div className="font-bold text-tech-text truncate">
+                                                  {it.title || it.name || 'Artículo'}
+                                                </div>
+                                              )}
+
+                                              <div className="text-[11px] text-tech-muted font-mono flex items-center gap-3 mt-0.5">
+                                                <span>SKU: {it.sku || '—'}</span>
+                                                <span>·</span>
+                                                <span>Cant: <strong className="text-tech-text">{qty}</strong></span>
+                                                <span>·</span>
+                                                <span>Precio unit.: {formatPrice(itPriceCents)}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          <div className="font-mono font-black italic text-tech-yellow text-sm shrink-0 pl-2">
+                                            {formatPrice(itPriceCents * qty)}
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+
+                                {/* Pie del Carrito con Total */}
+                                <div className="border-t border-tech-border/60 pt-3 flex items-center justify-between text-xs">
+                                  <div className="font-mono text-[10px] text-tech-muted truncate max-w-[200px] sm:max-w-md">
+                                    {c.sessionToken && (
+                                      <span>Token: <span className="text-zinc-500">{c.sessionToken.slice(0, 24)}...</span></span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-tech-muted uppercase font-bold text-[10px] tracking-wider">Total Carrito:</span>
+                                    <span className="text-base font-black font-mono italic text-tech-yellow">
+                                      {formatPrice(totalCents)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

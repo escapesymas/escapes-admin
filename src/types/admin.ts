@@ -146,6 +146,8 @@ export interface UserBilling {
 
 export interface User {
   id: number;
+  wp_id?: number;
+  wpId?: number;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -153,6 +155,7 @@ export interface User {
   role: UserRole;
   billing?: UserBilling | string;
   garage?: any;
+  userCart?: any;
   phone?: string;
   address?: string;
   city?: string;
@@ -178,25 +181,45 @@ export interface Coupon {
 }
 
 export interface CartItem {
-  id: number;
+  id?: number;
+  product_id?: number;
   name?: string;
   title?: string;
   sku?: string;
   price: number;
+  price_cents?: number;
+  regularPrice?: number;
+  salePrice?: number | null;
   quantity: number;
+  image?: string;
+  image_url?: string;
+  slug?: string;
+  category?: string;
+  categorySlug?: string;
+  inStock?: boolean;
+  stock?: number;
 }
 
 export interface Cart {
   id: number;
   userId?: number;
+  user_id?: number;
   userEmail?: string;
+  customer_email?: string;
   userFirstName?: string;
   userLastName?: string;
   userUsername?: string;
-  sessionToken: string;
-  updatedAt: string;
-  isDeleted: 0 | 1;
+  customer_name?: string;
+  customer_phone?: string;
+  sessionToken?: string;
+  session_token?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  isDeleted?: 0 | 1;
+  is_deleted?: number;
   items: CartItem[];
+  total_cents?: number;
+  status?: 'active' | 'abandoned';
 }
 
 export interface Category {
