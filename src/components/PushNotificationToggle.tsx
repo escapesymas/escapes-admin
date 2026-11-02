@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Bell, BellOff, Send, Share2, CheckCircle2, AlertCircle, ShoppingCart, AlertTriangle, ShoppingBag, Truck,
-  UserPlus, TrendingUp, RotateCcw, Mail, ShieldCheck, Star, Server, CheckCheck, Loader2, Eye, Flame,
+  UserPlus, TrendingUp, RotateCcw, Mail, ShieldCheck, Star, Server, CheckCheck, Loader2, Eye, Flame, LogOut,
 } from 'lucide-react';
 import {
   isPushNotificationSupported,
@@ -42,6 +42,7 @@ const CATEGORY_STYLE: Record<string, { icon: React.ElementType; color: string }>
   new_user: { icon: UserPlus, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' },
   visitor_entry: { icon: Eye, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' },
   visitor_activity: { icon: Flame, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
+  visitor_leave: { icon: LogOut, color: 'text-rose-400 bg-rose-500/10 border-rose-500/30' },
   system: { icon: Server, color: 'text-slate-300 bg-slate-500/10 border-slate-500/30' },
   daily_summary: { icon: TrendingUp, color: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
 };
