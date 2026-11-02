@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Icons from 'lucide-react';
+import { SessionDetailModal } from '../modals/SessionDetailModal';
 
 interface RealtimeActiveUser {
   sessionId: string;
@@ -109,6 +110,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [sessionSearch, setSessionSearch] = useState<string>('');
 
   // Carga de datos en tiempo real
   const fetchRealtime = useCallback(async (isBackground = false) => {
@@ -220,10 +223,10 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
       );
     }
     const ref = referrer.toLowerCase();
-    if (ref.includes('google')) {
+    if (ref.includes('googlequicksearchbox') || ref.includes('quicksearchbox') || ref.includes('google')) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <Icons.Search className="w-3 h-3" /> Google
+          <Icons.Search className="w-3 h-3" /> {ref.includes('quicksearchbox') ? 'Google (App)' : 'Google'}
         </span>
       );
     }
@@ -500,29 +503,147 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
       {/* 4. CONTENIDO: SUBPESTAÑA EN DIRECTO */}
       {activeSubTab === 'realtime' && (
         <div className="space-y-6">
-          {/* Tabla de Usuarios Activos Ahora */}
+          {/* Bloque de Usuarios Activos Ahora */}
           <div className="bg-tech-card border border-tech-border rounded-md shadow-xl overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-tech-border flex items-center justify-between flex-wrap gap-3">
+            <div className="p-4 sm:p-6 border-b border-tech-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm font-mono uppercase tracking-wider flex items-center gap-2 text-tech-text">
                   <Icons.Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
                   Sesiones Activas en los Últimos 30 Minutos
                 </h3>
                 <p className="text-[11px] text-tech-muted font-mono mt-1">
-                  Muestra la página exacta que está viendo cada usuario en este instante.
+                  Toca o haz clic en cualquier visitante para ver todas sus páginas, búsquedas y recorrido completo.
                 </p>
               </div>
-              <span className="text-xs font-mono bg-tech-carbon px-3 py-1.5 rounded border border-tech-border text-tech-yellow">
-                {realtime?.users.length || 0} sesiones detectadas
-              </span>
+
+              {/* Buscador de sesiones */}
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-64">
+                  <Icons.Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-tech-muted" />
+                  <input
+                    type="text"
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    placeholder="Filtrar ciudad, URL..."
+                    className="w-full bg-tech-carbon border border-tech-border rounded px-3 py-1.5 pl-8 text-xs font-mono text-tech-text focus:border-tech-yellow focus:outline-none"
+                  />
+                  {sessionSearch && (
+                    <button
+                      onClick={() => setSessionSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-tech-muted hover:text-tech-text"
+                    >
+                      <Icons.X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                <span className="text-xs font-mono bg-tech-carbon px-3 py-1.5 rounded border border-tech-border text-tech-yellow whitespace-nowrap hidden sm:inline-block">
+                  {realtime?.users.length || 0} sesiones
+                </span>
+              </div>
             </div>
 
-            {/* Responsive Table Wrapper con accesibilidad y sticky headers */}
+            {/* VISTA MÓVIL: Tarjetas legibles sin scroll horizontal incómodo */}
+            <div className="block md:hidden divide-y divide-tech-border">
+              {(() => {
+                const filtered = (realtime?.users || []).filter((u) => {
+                  if (!sessionSearch.trim()) return true;
+                  const q = sessionSearch.toLowerCase();
+                  return (
+                    u.city.toLowerCase().includes(q) ||
+                    u.currentPage.toLowerCase().includes(q) ||
+                    u.pageTitle.toLowerCase().includes(q) ||
+                    u.os.toLowerCase().includes(q) ||
+                    (u.referrerDomain && u.referrerDomain.toLowerCase().includes(q))
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="px-4 py-12 text-center text-tech-muted text-xs font-mono">
+                      No hay sesiones que coincidan con la búsqueda.
+                    </div>
+                  );
+                }
+
+                return filtered.map((user) => {
+                  const isSuperFresh = user.secondsAgo <= 60;
+                  return (
+                    <div
+                      key={user.sessionId}
+                      onClick={() => setSelectedSessionId(user.sessionId)}
+                      className={`p-4 space-y-3 cursor-pointer hover:bg-[#1a1b1e] active:bg-[#222428] transition-colors ${
+                        isSuperFresh ? 'bg-emerald-500/[0.04]' : ''
+                      }`}
+                    >
+                      {/* Fila superior: Estado + Ubicación + Referrer */}
+                      <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              isSuperFresh
+                                ? 'bg-emerald-500 animate-ping'
+                                : user.secondsAgo <= 300
+                                ? 'bg-emerald-500'
+                                : 'bg-zinc-600'
+                            }`}
+                          />
+                          <span
+                            className={`text-[11px] font-bold ${
+                              isSuperFresh ? 'text-emerald-400' : 'text-tech-text'
+                            }`}
+                          >
+                            {formatSecondsAgo(user.secondsAgo)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-tech-muted flex items-center gap-1 font-mono">
+                            <Icons.MapPin size={12} className="text-tech-yellow" />
+                            {user.city} ({user.country})
+                          </span>
+                          {getReferrerBadge(user.referrerDomain)}
+                        </div>
+                      </div>
+
+                      {/* Fila central: Página que está viendo */}
+                      <div className="bg-tech-carbon p-3 rounded border border-tech-border/80">
+                        <div className="text-[9px] text-tech-muted font-mono uppercase tracking-wider mb-0.5">
+                          Página actual
+                        </div>
+                        <div className="text-xs font-mono font-bold text-tech-yellow truncate flex items-center gap-1">
+                          <span className="truncate">{user.currentPage}</span>
+                          <Icons.ExternalLink size={12} className="opacity-60 flex-shrink-0" />
+                        </div>
+                        {user.pageTitle && (
+                          <div className="text-[10px] text-tech-muted truncate mt-0.5">
+                            {user.pageTitle}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Fila inferior: Dispositivo + Llamada a inspección */}
+                      <div className="flex items-center justify-between text-xs font-mono pt-0.5">
+                        <div className="flex items-center gap-1.5 text-tech-muted text-[11px]">
+                          {getDeviceIcon(user.device)}
+                          <span>{user.os} · {user.browser}</span>
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-tech-yellow font-bold bg-tech-yellow/10 px-2.5 py-1 rounded border border-tech-yellow/20">
+                          <span>{user.totalEvents} {user.totalEvents === 1 ? 'pág' : 'págs'} · Ver recorrido</span>
+                          <Icons.ArrowRight size={12} />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* VISTA ESCRITORIO: Tabla completa con sticky headers y clic para inspección */}
             <div
               tabIndex={0}
               role="region"
               aria-label="Tabla de usuarios activos en tiempo real"
-              className="overflow-x-auto max-h-[600px] focus:outline-none focus:ring-1 focus:ring-tech-yellow/50"
+              className="hidden md:block overflow-x-auto max-h-[600px] focus:outline-none focus:ring-1 focus:ring-tech-yellow/50"
             >
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10 bg-tech-carbon text-[9px] text-tech-muted font-mono uppercase tracking-widest border-b border-tech-border shadow-sm">
@@ -533,111 +654,146 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                     <th className="px-4 sm:px-6 py-3.5">Origen / Referrer</th>
                     <th className="px-4 sm:px-6 py-3.5">Dispositivo</th>
                     <th className="px-4 sm:px-6 py-3.5 text-right">Eventos</th>
+                    <th className="px-4 sm:px-6 py-3.5 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-tech-border">
-                  {realtime?.users.map((user) => {
-                    const isSuperFresh = user.secondsAgo <= 60;
-                    return (
-                      <tr
-                        key={user.sessionId}
-                        className={`hover:bg-[#1a1b1e] transition-colors ${
-                          isSuperFresh ? 'bg-emerald-500/[0.03]' : ''
-                        }`}
-                      >
-                        {/* Estado / Tiempo transcurrido */}
-                        <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`w-2 h-2 rounded-full ${
-                                isSuperFresh
-                                  ? 'bg-emerald-500 animate-ping'
-                                  : user.secondsAgo <= 300
-                                  ? 'bg-emerald-500'
-                                  : 'bg-zinc-600'
-                              }`}
-                            />
-                            <span
-                              className={`text-[11px] font-mono font-medium ${
-                                isSuperFresh
-                                  ? 'text-emerald-400 font-bold'
-                                  : user.secondsAgo <= 300
-                                  ? 'text-emerald-300'
-                                  : 'text-tech-muted'
-                              }`}
-                            >
-                              {formatSecondsAgo(user.secondsAgo)}
-                            </span>
-                          </div>
-                        </td>
+                  {(() => {
+                    const filtered = (realtime?.users || []).filter((u) => {
+                      if (!sessionSearch.trim()) return true;
+                      const q = sessionSearch.toLowerCase();
+                      return (
+                        u.city.toLowerCase().includes(q) ||
+                        u.currentPage.toLowerCase().includes(q) ||
+                        u.pageTitle.toLowerCase().includes(q) ||
+                        u.os.toLowerCase().includes(q) ||
+                        (u.referrerDomain && u.referrerDomain.toLowerCase().includes(q))
+                      );
+                    });
 
-                        {/* Ubicación */}
-                        <td className="px-4 sm:px-6 py-3.5">
-                          <div className="flex items-center gap-1.5">
-                            <Icons.MapPin className="w-3.5 h-3.5 text-tech-yellow flex-shrink-0" />
-                            <div className="flex flex-col">
-                              <span className="text-xs font-mono font-medium text-tech-text">
-                                {user.city}
-                              </span>
-                              <span className="text-[10px] text-tech-muted font-mono">
-                                {user.region ? `${user.region}, ` : ''}{user.country}
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-12 text-center text-tech-muted text-xs font-mono">
+                            {realtime?.users.length === 0
+                              ? 'No hay visitantes activos en este momento. Los nuevos accesos aparecerán aquí en vivo en cuanto entren a la web.'
+                              : 'No hay sesiones que coincidan con el filtro.'}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((user) => {
+                      const isSuperFresh = user.secondsAgo <= 60;
+                      return (
+                        <tr
+                          key={user.sessionId}
+                          onClick={() => setSelectedSessionId(user.sessionId)}
+                          className={`hover:bg-[#1a1b1e] cursor-pointer transition-colors ${
+                            isSuperFresh ? 'bg-emerald-500/[0.03]' : ''
+                          }`}
+                        >
+                          {/* Estado / Tiempo transcurrido */}
+                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  isSuperFresh
+                                    ? 'bg-emerald-500 animate-ping'
+                                    : user.secondsAgo <= 300
+                                    ? 'bg-emerald-500'
+                                    : 'bg-zinc-600'
+                                }`}
+                              />
+                              <span
+                                className={`text-[11px] font-mono font-medium ${
+                                  isSuperFresh
+                                    ? 'text-emerald-400 font-bold'
+                                    : user.secondsAgo <= 300
+                                    ? 'text-emerald-300'
+                                    : 'text-tech-muted'
+                                }`}
+                              >
+                                {formatSecondsAgo(user.secondsAgo)}
                               </span>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Página actual que está viendo */}
-                        <td className="px-4 sm:px-6 py-3.5">
-                          <div className="flex flex-col gap-0.5 max-w-md">
-                            <a
-                              href={`https://escapesymas.com${user.currentPage}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs font-mono text-tech-yellow hover:underline truncate flex items-center gap-1"
-                              title={user.currentPage}
-                            >
-                              <span className="truncate">{user.currentPage}</span>
-                              <Icons.ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
-                            </a>
-                            {user.pageTitle && (
-                              <span className="text-[10px] text-tech-muted truncate" title={user.pageTitle}>
-                                {user.pageTitle}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Origen / Referrer */}
-                        <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                          {getReferrerBadge(user.referrerDomain)}
-                        </td>
-
-                        {/* Dispositivo y Navegador */}
-                        <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {getDeviceIcon(user.device)}
-                            <div className="flex flex-col text-[11px] font-mono">
-                              <span className="text-tech-text">{user.os}</span>
-                              <span className="text-[9px] text-tech-muted">{user.browser}</span>
+                          {/* Ubicación */}
+                          <td className="px-4 sm:px-6 py-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <Icons.MapPin className="w-3.5 h-3.5 text-tech-yellow flex-shrink-0" />
+                              <div className="flex flex-col">
+                                <span className="text-xs font-mono font-medium text-tech-text">
+                                  {user.city}
+                                </span>
+                                <span className="text-[10px] text-tech-muted font-mono">
+                                  {user.region ? `${user.region}, ` : ''}{user.country}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Total eventos */}
-                        <td className="px-4 sm:px-6 py-3.5 text-right font-mono text-xs text-tech-muted">
-                          {user.totalEvents} {user.totalEvents === 1 ? 'vista' : 'vistas'}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          {/* Página actual que está viendo */}
+                          <td className="px-4 sm:px-6 py-3.5">
+                            <div className="flex flex-col gap-0.5 max-w-md">
+                              <a
+                                href={`https://escapesymas.com${user.currentPage}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs font-mono text-tech-yellow hover:underline truncate flex items-center gap-1"
+                                title={user.currentPage}
+                              >
+                                <span className="truncate">{user.currentPage}</span>
+                                <Icons.ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
+                              </a>
+                              {user.pageTitle && (
+                                <span className="text-[10px] text-tech-muted truncate" title={user.pageTitle}>
+                                  {user.pageTitle}
+                                </span>
+                              )}
+                            </div>
+                          </td>
 
-                  {(!realtime || realtime.users.length === 0) && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-tech-muted text-xs font-mono">
-                        No hay visitantes activos en este momento. Los nuevos accesos aparecerán aquí en vivo en cuanto entren a la web.
-                      </td>
-                    </tr>
-                  )}
+                          {/* Origen / Referrer */}
+                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                            {getReferrerBadge(user.referrerDomain)}
+                          </td>
+
+                          {/* Dispositivo y Navegador */}
+                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              {getDeviceIcon(user.device)}
+                              <div className="flex flex-col text-[11px] font-mono">
+                                <span className="text-tech-text">{user.os}</span>
+                                <span className="text-[9px] text-tech-muted">{user.browser}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Total eventos */}
+                          <td className="px-4 sm:px-6 py-3.5 text-right font-mono text-xs text-tech-muted">
+                            {user.totalEvents} {user.totalEvents === 1 ? 'vista' : 'vistas'}
+                          </td>
+
+                          {/* Botón Ver Recorrido */}
+                          <td className="px-4 sm:px-6 py-3.5 text-right whitespace-nowrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSessionId(user.sessionId);
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-tech-text hover:text-tech-yellow border border-tech-border hover:border-tech-yellow px-2.5 py-1 rounded transition-colors"
+                            >
+                              <span>Recorrido</span>
+                              <Icons.ChevronRight size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -651,7 +807,12 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
             </h3>
             <div className="divide-y divide-tech-border">
               {realtime?.recentPageviews.slice(0, 15).map((pv) => (
-                <div key={pv.eventId} className="py-3 flex items-center justify-between gap-4 text-xs font-mono flex-wrap sm:flex-nowrap">
+                <div
+                  key={pv.eventId}
+                  onClick={() => setSelectedSessionId(pv.sessionId)}
+                  className="py-3 flex items-center justify-between gap-4 text-xs font-mono flex-wrap sm:flex-nowrap cursor-pointer hover:bg-[#1a1b1e] p-2 rounded transition-colors"
+                  title="Haz clic para ver el recorrido completo de este visitante"
+                >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-[10px] text-tech-muted w-20 flex-shrink-0">
                       {formatSecondsAgo(pv.secondsAgo)}
@@ -661,6 +822,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                       href={`https://escapesymas.com${pv.urlPath}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="text-tech-yellow hover:underline truncate"
                       title={pv.urlPath}
                     >
@@ -672,6 +834,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                       <Icons.MapPin className="w-3 h-3 text-tech-yellow/70" /> {pv.city} ({pv.country})
                     </span>
                     {getReferrerBadge(pv.referrerDomain)}
+                    <span className="text-[10px] text-tech-muted hover:text-tech-yellow hidden sm:inline">
+                      Ver →
+                    </span>
                   </div>
                 </div>
               ))}
@@ -1022,6 +1187,15 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Inspección de Recorrido de Sesión */}
+      {selectedSessionId && (
+        <SessionDetailModal
+          sessionId={selectedSessionId}
+          adminToken={adminToken}
+          onClose={() => setSelectedSessionId(null)}
+        />
       )}
     </div>
   );
