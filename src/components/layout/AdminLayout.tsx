@@ -263,7 +263,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       )}
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full min-w-0">
         {children}
       </main>
 

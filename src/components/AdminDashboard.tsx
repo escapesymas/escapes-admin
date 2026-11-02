@@ -615,7 +615,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
       isAdvisor={isAdvisor}
     >
       {isAdvisor && <AgentLegalGate adminToken={adminToken} onLogout={onLogout} />}
-      <div className={activeTab === 'chat' ? 'p-4 sm:p-6' : 'p-4 sm:p-6 md:p-10'}>
+      <div className={`min-w-0 max-w-full ${activeTab === 'chat' ? 'p-4 sm:p-6' : 'p-4 sm:p-6 md:p-10'}`}>
         {error && (
           <div className="mb-6 p-4 bg-red-950/20 border border-red-900/30 text-red-400 text-xs rounded-xl flex items-center gap-3">
             <Icons.AlertTriangle className="w-5 h-5 shrink-0" />

@@ -252,7 +252,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
   };
 
   return (
-    <div className="space-y-6 animate-fade-in text-tech-text">
+    <div className="space-y-6 animate-fade-in text-tech-text min-w-0 max-w-full">
       {/* 1. Header con Controles en Vivo y Filtros */}
       <div className="bg-tech-card border border-tech-border rounded-md p-4 sm:p-6 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-wrap">
@@ -852,8 +852,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
 
       {/* 5. CONTENIDO: SUBPESTAÑA EVOLUCIÓN TEMPORAL (GRÁFICO) */}
       {activeSubTab === 'overview' && stats && (
-        <div className="bg-tech-card border border-tech-border rounded-md p-6 shadow-xl space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-4 border-b border-tech-border pb-4">
+        <div className="bg-tech-card border border-tech-border rounded-md p-4 sm:p-6 shadow-xl space-y-5 min-w-0 max-w-full overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-tech-border pb-4">
             <div>
               <h3 className="text-sm font-mono uppercase tracking-wider text-tech-text flex items-center gap-2">
                 <Icons.TrendingUp className="w-4 h-4 text-tech-yellow" />
@@ -863,93 +863,124 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                 Comparativa entre páginas vistas totales, visitantes únicos y tráfico orgánico de Google.
               </p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-mono">
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-mono">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 bg-blue-500 rounded-sm" /> Páginas vistas
+                <span className="w-2.5 h-2.5 bg-blue-500 rounded-sm" /> Páginas vistas
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 bg-tech-yellow rounded-sm" /> Visitantes únicos
+                <span className="w-2.5 h-2.5 bg-tech-yellow rounded-sm" /> Visitantes únicos
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 bg-emerald-400 rounded-sm" /> Google Orgánico
+                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-sm" /> Google Orgánico
               </span>
             </div>
           </div>
 
-          {/* Gráfico SVG de Barras Interactivo */}
+          {/* Gráfico de Barras con Desplazamiento Horizontal Autónomo en Móvil */}
           {stats.timeSeries.length > 0 ? (
-            <div className="w-full">
-              <div className="h-64 sm:h-72 w-full flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 px-2 bg-tech-carbon/60 rounded border border-tech-border relative">
-                {(() => {
-                  const maxVal = Math.max(
-                    ...stats.timeSeries.map((d) => Math.max(d.pageviews, d.visitors, d.google)),
-                    5
-                  );
-
-                  return stats.timeSeries.map((point, idx) => {
-                    const pvHeight = Math.max(4, Math.round((point.pageviews / maxVal) * 100));
-                    const visHeight = Math.max(4, Math.round((point.visitors / maxVal) * 100));
-                    const gooHeight = Math.max(2, Math.round((point.google / maxVal) * 100));
-                    const isHovered = hoveredPoint === idx;
+            <div className="w-full min-w-0">
+              <div className="w-full overflow-x-auto pb-3 pt-1 scrollbar-thin overscroll-x-contain touch-pan-x">
+                <div className="h-64 sm:h-72 min-w-[560px] sm:min-w-0 w-full flex items-end gap-1 sm:gap-2.5 pt-8 pb-3 px-3 bg-tech-carbon/60 rounded border border-tech-border relative">
+                  {(() => {
+                    const maxVal = Math.max(
+                      ...stats.timeSeries.map((d) => Math.max(d.pageviews, d.visitors, d.google)),
+                      5
+                    );
 
                     return (
-                      <div
-                        key={idx}
-                        className="flex-1 h-full flex flex-col justify-end items-center group relative cursor-pointer"
-                        onMouseEnter={() => setHoveredPoint(idx)}
-                        onMouseLeave={() => setHoveredPoint(null)}
-                      >
-                        {/* Tooltip flotante al pasar el ratón */}
-                        {isHovered && (
-                          <div className="absolute bottom-full mb-2 z-20 bg-tech-card border border-tech-border rounded p-2.5 shadow-2xl text-[10px] font-mono min-w-[140px] pointer-events-none animate-fade-in">
-                            <div className="text-tech-yellow font-bold border-b border-tech-border pb-1 mb-1.5">
-                              {point.label}
-                            </div>
-                            <div className="flex justify-between text-blue-400">
-                              <span>Páginas:</span> <strong>{point.pageviews}</strong>
-                            </div>
-                            <div className="flex justify-between text-tech-text">
-                              <span>Visitantes:</span> <strong>{point.visitors}</strong>
-                            </div>
-                            <div className="flex justify-between text-emerald-400">
-                              <span>Google:</span> <strong>{point.google}</strong>
-                            </div>
+                      <>
+                        {/* Líneas de guía horizontales de fondo */}
+                        <div className="absolute inset-x-3 top-8 bottom-8 flex flex-col justify-between pointer-events-none opacity-20 z-0">
+                          <div className="border-b border-dashed border-tech-muted w-full relative">
+                            <span className="absolute -top-3.5 right-0 text-[8px] font-mono text-tech-muted">{maxVal}</span>
                           </div>
-                        )}
-
-                        {/* Barras agrupadas */}
-                        <div className="w-full flex items-end justify-center gap-0.5 sm:gap-1 h-full">
-                          {/* Barra Páginas Vistas */}
-                          <div
-                            className={`w-full max-w-[12px] bg-blue-500/80 rounded-t-sm transition-all duration-300 ${
-                              isHovered ? 'bg-blue-400' : ''
-                            }`}
-                            style={{ height: `${pvHeight}%` }}
-                          />
-                          {/* Barra Visitantes */}
-                          <div
-                            className={`w-full max-w-[12px] bg-tech-yellow/80 rounded-t-sm transition-all duration-300 ${
-                              isHovered ? 'bg-tech-yellow' : ''
-                            }`}
-                            style={{ height: `${visHeight}%` }}
-                          />
-                          {/* Barra Google */}
-                          <div
-                            className={`w-full max-w-[12px] bg-emerald-400/80 rounded-t-sm transition-all duration-300 ${
-                              isHovered ? 'bg-emerald-300' : ''
-                            }`}
-                            style={{ height: `${gooHeight}%` }}
-                          />
+                          <div className="border-b border-dashed border-tech-muted w-full relative">
+                            <span className="absolute -top-3.5 right-0 text-[8px] font-mono text-tech-muted">{Math.round(maxVal * 0.66)}</span>
+                          </div>
+                          <div className="border-b border-dashed border-tech-muted w-full relative">
+                            <span className="absolute -top-3.5 right-0 text-[8px] font-mono text-tech-muted">{Math.round(maxVal * 0.33)}</span>
+                          </div>
+                          <div className="border-b border-tech-border/50 w-full" />
                         </div>
 
-                        {/* Etiqueta X */}
-                        <span className="text-[9px] font-mono text-tech-muted mt-2 truncate w-full text-center">
-                          {point.label}
-                        </span>
-                      </div>
+                        {stats.timeSeries.map((point, idx) => {
+                          const pvHeight = Math.max(4, Math.round((point.pageviews / maxVal) * 100));
+                          const visHeight = Math.max(4, Math.round((point.visitors / maxVal) * 100));
+                          const gooHeight = Math.max(2, Math.round((point.google / maxVal) * 100));
+                          const isHovered = hoveredPoint === idx;
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex-1 min-w-[18px] sm:min-w-0 h-full flex flex-col justify-end items-center group relative cursor-pointer select-none z-10"
+                              onMouseEnter={() => setHoveredPoint(idx)}
+                              onMouseLeave={() => setHoveredPoint(null)}
+                              onClick={() => setHoveredPoint(hoveredPoint === idx ? null : idx)}
+                            >
+                              {/* Tooltip flotante al pasar el ratón o pulsar en móvil */}
+                              {isHovered && (
+                                <div className="absolute bottom-full mb-2 z-30 bg-tech-card/95 backdrop-blur-md border border-tech-border rounded p-2.5 shadow-2xl text-[10px] font-mono min-w-[130px] pointer-events-none animate-fade-in -translate-x-1/2 left-1/2 whitespace-nowrap">
+                                  <div className="text-tech-yellow font-bold border-b border-tech-border pb-1 mb-1.5 flex items-center justify-between gap-2">
+                                    <span>{point.label}</span>
+                                    <span className="text-[8px] text-tech-muted font-normal">Detalle</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-blue-400 py-0.5">
+                                    <span>Páginas:</span> <strong>{point.pageviews}</strong>
+                                  </div>
+                                  <div className="flex justify-between items-center text-tech-text py-0.5">
+                                    <span>Visitantes:</span> <strong>{point.visitors}</strong>
+                                  </div>
+                                  <div className="flex justify-between items-center text-emerald-400 py-0.5">
+                                    <span>Google:</span> <strong>{point.google}</strong>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Barras agrupadas */}
+                              <div className="w-full flex items-end justify-center gap-0.5 sm:gap-1 h-full">
+                                {/* Barra Páginas Vistas */}
+                                <div
+                                  className={`w-full max-w-[10px] sm:max-w-[12px] bg-blue-500/80 rounded-t-sm transition-all duration-300 ${
+                                    isHovered ? 'bg-blue-400 ring-1 ring-blue-300' : ''
+                                  }`}
+                                  style={{ height: `${pvHeight}%` }}
+                                />
+                                {/* Barra Visitantes */}
+                                <div
+                                  className={`w-full max-w-[10px] sm:max-w-[12px] bg-tech-yellow/80 rounded-t-sm transition-all duration-300 ${
+                                    isHovered ? 'bg-tech-yellow ring-1 ring-yellow-200' : ''
+                                  }`}
+                                  style={{ height: `${visHeight}%` }}
+                                />
+                                {/* Barra Google */}
+                                <div
+                                  className={`w-full max-w-[10px] sm:max-w-[12px] bg-emerald-400/80 rounded-t-sm transition-all duration-300 ${
+                                    isHovered ? 'bg-emerald-300 ring-1 ring-emerald-200' : ''
+                                  }`}
+                                  style={{ height: `${gooHeight}%` }}
+                                />
+                              </div>
+
+                              {/* Etiqueta X */}
+                              <span className="text-[9px] font-mono text-tech-muted mt-2 truncate w-full text-center">
+                                {point.label}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </>
                     );
-                  });
-                })()}
+                  })()}
+                </div>
+              </div>
+
+              {/* Pista de interacción para dispositivos móviles */}
+              <div className="sm:hidden flex items-center justify-between text-[10px] text-tech-muted font-mono pt-1 px-1">
+                <span className="flex items-center gap-1 text-tech-yellow/80">
+                  <Icons.Info className="w-3 h-3" />
+                  Toca una barra para ver datos
+                </span>
+                <span>← Desliza para explorar →</span>
               </div>
             </div>
           ) : (
