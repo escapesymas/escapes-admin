@@ -146,16 +146,16 @@ export const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
 
   const handlePreferenceChange = async (key: string, value: boolean) => {
     setPrefs((p) => ({ ...p, [key]: value }));
-    if (isSubscribed) {
-      const ok = await updatePushPreferences({ [key]: value }, token);
-      if (!ok) setErrorMsg('No se pudo guardar la preferencia.');
-    }
+    const ok = await updatePushPreferences({ [key]: value }, token);
+    if (!ok) setErrorMsg('No se pudo guardar la preferencia.');
+    loadHistory();
   };
 
   const setAll = async (value: boolean) => {
     const all = Object.fromEntries(categories.map((c) => [c.key, value]));
     setPrefs(all);
-    if (isSubscribed) await updatePushPreferences(all, token);
+    await updatePushPreferences(all, token);
+    loadHistory();
   };
 
   const handleSendTest = async () => {
@@ -272,15 +272,13 @@ export const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
             <div>
               <h4 className="text-base font-semibold text-white">Qué avisos quieres recibir</h4>
               <p className="text-xs text-slate-400 mt-1">
-                {isSubscribed ? 'Se guarda para este dispositivo. El historial guarda todos los avisos.' : 'Activa los avisos para elegir qué recibir en este dispositivo.'}
+                Configura qué avisos recibir en tus dispositivos y ver en el historial del panel.
               </p>
             </div>
-            {isSubscribed && (
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => setAll(true)} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">Todos</button>
-                <button onClick={() => setAll(false)} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">Ninguno</button>
-              </div>
-            )}
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setAll(true)} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">Todos</button>
+              <button onClick={() => setAll(false)} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">Ninguno</button>
+            </div>
           </div>
 
           <div className="space-y-2.5">
@@ -290,9 +288,9 @@ export const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
               return (
                 <label
                   key={opt.key}
-                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-4 ${
-                    isSubscribed ? 'cursor-pointer' : 'cursor-not-allowed'
-                  } ${isChecked ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-950/40 border-slate-800/50 opacity-60'}`}
+                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-4 cursor-pointer ${
+                    isChecked ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-950/40 border-slate-800/50 opacity-60'
+                  }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`p-2 rounded-lg border shrink-0 ${color}`}>
@@ -307,7 +305,6 @@ export const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
                     <input
                       type="checkbox"
                       checked={isChecked}
-                      disabled={!isSubscribed}
                       onChange={(e) => handlePreferenceChange(opt.key, e.target.checked)}
                       className="sr-only peer"
                     />

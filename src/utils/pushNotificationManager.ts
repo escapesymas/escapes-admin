@@ -142,12 +142,11 @@ export async function getPushPreferences(token?: string): Promise<{ categories: 
 }
 
 export async function updatePushPreferences(prefs: NotificationPreferences, token?: string): Promise<boolean> {
-  const subscription = await getCurrentSubscription();
-  if (!subscription) return false;
+  const subscription = await getCurrentSubscription().catch(() => null);
   const res = await fetch(`${API_BASE}/push/preferences`, {
     method: 'POST',
     headers: headers(token),
-    body: JSON.stringify({ endpoint: subscription.endpoint, preferences: prefs }),
+    body: JSON.stringify({ endpoint: subscription?.endpoint || null, preferences: prefs }),
   }).catch(() => null);
   return !!res?.ok;
 }
