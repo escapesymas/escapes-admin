@@ -308,14 +308,16 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
           </button>
 
           {/* Toggle Excluir Tráfico Interno */}
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-mono text-tech-muted hover:text-tech-text bg-tech-carbon/60 px-3 py-1.5 rounded-sm border border-tech-border">
+          <label
+            title="Oculta toda Canarias para no contar tus pruebas. Los clientes reales de Canarias tampoco salen mientras esté marcado."
+            className="flex items-center gap-2 cursor-pointer select-none text-xs font-mono text-tech-muted hover:text-tech-text bg-tech-carbon/60 px-3 py-1.5 rounded-sm border border-tech-border">
             <input
               type="checkbox"
               checked={excludeInternal}
               onChange={(e) => setExcludeInternal(e.target.checked)}
               className="rounded border-tech-border text-tech-yellow focus:ring-0 bg-tech-card"
             />
-            <span className="text-[11px]">Excluir tráfico propio (Canarias)</span>
+            <span className="text-[11px]">Excluir tráfico propio (toda Canarias)</span>
           </label>
         </div>
 
