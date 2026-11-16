@@ -224,12 +224,16 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
         );
       case 'sale_price':
         return <span className="font-mono text-xs text-green-500">{p.sale_price ? formatPrice(p.sale_price) : '-'}</span>;
-      case 'stock':
+      case 'stock': {
+        // Sin stock pero con fecha prevista de Bihr: en reaprovisionamiento (products.restock_date).
+        const restockDate = p.stock <= 0 && p.restock_date ? String(p.restock_date).slice(0, 10).split('-').reverse().join('/') : '';
         return (
-          <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase italic ${p.stock > 0 ? 'bg-green-950/20 text-green-500 border border-green-900/30' : 'bg-red-950/20 text-red-500 border border-red-900/30'}`}>
-            {p.stock > 0 ? `${p.stock} Uds` : 'Agotado'}
+          <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase italic ${p.stock > 0 ? 'bg-green-950/20 text-green-500 border border-green-900/30' : restockDate ? 'bg-amber-950/20 text-amber-400 border border-amber-900/30' : 'bg-red-950/20 text-red-500 border border-red-900/30'}`}
+            title={restockDate ? `Bihr lo reaprovisiona: previsto el ${restockDate}` : undefined}>
+            {p.stock > 0 ? `${p.stock} Uds` : restockDate ? `Reaprov. ${restockDate.slice(0, 5)}` : 'Agotado'}
           </span>
         );
+      }
       case 'dropshipping':
         return p.dropshipping ? (
           <span className="text-[10px] bg-blue-950/20 text-blue-400 border border-blue-900/30 px-2 py-0.5 rounded font-bold">Sí</span>

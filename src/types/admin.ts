@@ -97,6 +97,8 @@ export interface Product {
   sale_price?: number;
   cost?: number;
   stock: number;
+  /** Fecha prevista de reaprovisionamiento de Bihr (llega como ISO: se muestra la parte de la fecha). */
+  restock_date?: string | null;
   status: ProductStatus;
   images: ProductImage[] | string;
   compatibility: ProductCompatibilityEntry[] | string;

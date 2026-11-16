@@ -46,6 +46,8 @@ type ProductDetailResponse = {
   live_stock?: {
     quantity: number | null;
     status: string | null;
+    /** Fecha prevista de reaprovisionamiento de Bihr (AAAA-MM-DD). */
+    restockDate?: string | null;
   };
 };
 
@@ -408,6 +410,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ session, produc
                       {data?.live_stock?.quantity ?? product.stock ?? 0} uds
                     </div>
                     <div className="text-[10px] text-tech-muted font-bold">{data?.live_stock?.status ?? product.stock_status ?? '—'}</div>
+                    {(data?.live_stock?.quantity ?? product.stock ?? 0) <= 0 && (data?.live_stock?.restockDate ?? product.restock_date) && (
+                      <div className="text-[10px] text-amber-400 font-bold">
+                        En reaprovisionamiento · previsto {String(data?.live_stock?.restockDate ?? product.restock_date).slice(0, 10).split('-').reverse().join('/')}
+                      </div>
+                    )}
                   </div>
                 </div>
 
