@@ -107,7 +107,7 @@ export const HighlightsPanel: React.FC<HighlightsPanelProps> = ({ insights, load
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {chips.map((c) => {
             const n = filterCount(c.id);
             return (

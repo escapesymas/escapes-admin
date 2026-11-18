@@ -227,8 +227,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
   return (
     <div className="space-y-6 animate-fade-in text-tech-text min-w-0 max-w-full">
       {/* 1. Header con Controles en Vivo y Filtros */}
-      <div className="bg-tech-card border border-tech-border rounded-md p-4 sm:p-6 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-wrap">
+      <div className="bg-tech-card border border-tech-border rounded-md p-4 sm:p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-wrap min-w-0">
           {/* Badge EN VIVO */}
           <div className="flex items-center gap-2.5 bg-tech-carbon px-3.5 py-2 rounded-md border border-tech-border">
             <span className="relative flex h-3 w-3">
@@ -296,7 +296,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
         </div>
 
         {/* Selector de Rango Temporal */}
-        <div className="flex items-center gap-1 bg-tech-carbon p-1 rounded-md border border-tech-border w-full lg:w-auto overflow-x-auto">
+        <div className="flex items-center gap-1 bg-tech-carbon p-1 rounded-md border border-tech-border max-w-full shrink-0 overflow-x-auto">
           {(
             [
               { id: 'today', label: 'Hoy' },
@@ -384,7 +384,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
       </div>
 
       {/* 3. Navegación por Subpestañas del Módulo */}
-      <div className="flex items-center gap-2 border-b border-tech-border overflow-x-auto pb-1">
+      {/* Desde 640 px las pestañas pasan a una segunda línea si no caben (antes se cortaban con un scroll escondido); en el móvil siguen con scroll lateral. */}
+      <div className="flex items-center gap-x-1 gap-y-0.5 border-b border-tech-border overflow-x-auto pb-1 sm:pb-0 sm:overflow-visible sm:flex-wrap">
         {([
           { id: 'highlights', label: `Destacados (${insights ? insights.summary.tiers.hot + insights.summary.tiers.engaged : 0})`, icon: Icons.Flame, iconCls: 'text-orange-400' },
           { id: 'realtime', label: `En directo (${realtime?.users.length || 0})`, icon: Icons.Radio, iconCls: 'text-emerald-400' },
@@ -399,7 +400,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
             <button
               key={t.id}
               onClick={() => setActiveSubTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
                 activeSubTab === t.id
                   ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
                   : 'border-transparent text-tech-muted hover:text-tech-text'

@@ -356,7 +356,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       )}
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full min-w-0">
+      {/* Tope de 112 rem (1792 px): en un monitor de 1920 px las tablas anchas ya no se quedan en 1280 px con huecos vacíos a los lados. */}
+      <main className="flex-1 overflow-y-auto max-w-[112rem] mx-auto w-full min-w-0">
         {children}
       </main>
 

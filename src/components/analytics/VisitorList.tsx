@@ -31,8 +31,8 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
 
   return (
     <>
-      {/* VISTA MÓVIL: tarjetas legibles sin scroll horizontal */}
-      <div className="block md:hidden divide-y divide-tech-border">
+      {/* VISTA MÓVIL Y TABLET: tarjetas legibles sin scroll horizontal (la tabla de 6 columnas solo cabe desde 1280 px) */}
+      <div className="block xl:hidden divide-y divide-tech-border">
         {items.map((u) => (
           <div
             key={u.sessionId}
@@ -79,18 +79,17 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
         tabIndex={0}
         role="region"
         aria-label={ariaLabel}
-        className="hidden md:block overflow-x-auto max-h-[640px] focus:outline-none focus:ring-1 focus:ring-tech-yellow/50"
+        className="hidden xl:block overflow-x-auto max-h-[640px] focus:outline-none focus:ring-1 focus:ring-tech-yellow/50"
       >
         <table className="w-full text-left border-collapse">
           <thead className="sticky top-0 z-10 bg-tech-carbon text-[9px] text-tech-muted font-mono uppercase tracking-widest border-b border-tech-border shadow-sm">
             <tr>
-              <th className="px-4 py-3.5">Prioridad</th>
-              <th className="px-4 py-3.5">Visitante</th>
-              <th className="px-4 py-3.5">Qué ha hecho</th>
-              <th className="px-4 py-3.5">{pageLabel}</th>
-              <th className="px-4 py-3.5">Origen</th>
-              <th className="px-4 py-3.5">Actividad</th>
-              <th className="px-4 py-3.5 text-right" />
+              <th className="px-3 py-3.5">Prioridad</th>
+              <th className="px-3 py-3.5">Visitante</th>
+              <th className="px-3 py-3.5">Qué ha hecho</th>
+              <th className="px-3 py-3.5 w-[32%]">{pageLabel}</th>
+              <th className="px-3 py-3.5">Origen</th>
+              <th className="px-3 py-3.5">Actividad</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-tech-border">
@@ -100,7 +99,7 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
                 onClick={() => onSelect(u.sessionId)}
                 className={`hover:bg-[#1a1b1e] cursor-pointer transition-colors ${TIER_META[u.tier].row} ${rowBg(u)}`}
               >
-                <td className="px-4 py-3.5 whitespace-nowrap align-top">
+                <td className="px-3 py-3.5 whitespace-nowrap align-top">
                   <div className="flex flex-col gap-1.5 items-start">
                     <TierBadge tier={u.tier} />
                     <span className="text-[11px] font-mono text-tech-text">
@@ -109,7 +108,7 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
                   </div>
                 </td>
 
-                <td className="px-4 py-3.5 align-top whitespace-nowrap">
+                <td className="px-3 py-3.5 align-top min-w-[150px]">
                   <div className="flex items-start gap-1.5">
                     <Icons.MapPin className="w-3.5 h-3.5 text-tech-yellow flex-shrink-0 mt-0.5" />
                     <div className="flex flex-col">
@@ -122,18 +121,18 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
                   </div>
                 </td>
 
-                <td className="px-4 py-3.5 align-top min-w-[220px]">
+                <td className="px-3 py-3.5 align-top min-w-[200px]">
                   <SignalChips signals={u.signals} cartValue={u.cartValue} interests={u} />
                 </td>
 
-                <td className="px-4 py-3.5 align-top">
-                  <div className="flex flex-col gap-0.5 max-w-xs">
+                <td className="px-3 py-3.5 align-top max-w-0">
+                  <div className="flex flex-col gap-0.5 min-w-0">
                     <a
                       href={`https://escapesymas.com${u.page}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="text-xs font-mono text-tech-yellow hover:underline truncate flex items-center gap-1"
+                      className="text-xs font-mono text-tech-yellow hover:underline truncate flex items-center gap-1 min-w-0"
                       title={u.page}
                     >
                       <span className="truncate">{u.page}</span>
@@ -146,23 +145,22 @@ export const VisitorList: React.FC<VisitorListProps> = ({ items, onSelect, empty
                   </div>
                 </td>
 
-                <td className="px-4 py-3.5 whitespace-nowrap align-top"><ReferrerBadge referrer={u.referrer} /></td>
+                <td className="px-3 py-3.5 whitespace-nowrap align-top"><ReferrerBadge referrer={u.referrer} /></td>
 
-                <td className="px-4 py-3.5 whitespace-nowrap align-top">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${statusDot(u.secondsAgo)}`} />
-                    <span className={`text-[11px] font-mono ${statusText(u.secondsAgo)}`}>{formatSecondsAgo(u.secondsAgo)}</span>
+                <td className="px-3 py-3.5 whitespace-nowrap align-top">
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${statusDot(u.secondsAgo)}`} />
+                      <span className={`text-[11px] font-mono ${statusText(u.secondsAgo)}`}>{formatSecondsAgo(u.secondsAgo)}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelect(u.sessionId); }}
+                      className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-tech-text hover:text-tech-yellow border border-tech-border hover:border-tech-yellow px-2.5 py-1 rounded transition-colors"
+                    >
+                      <span>Recorrido</span>
+                      <Icons.ChevronRight size={12} />
+                    </button>
                   </div>
-                </td>
-
-                <td className="px-4 py-3.5 text-right whitespace-nowrap align-top">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onSelect(u.sessionId); }}
-                    className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-tech-text hover:text-tech-yellow border border-tech-border hover:border-tech-yellow px-2.5 py-1 rounded transition-colors"
-                  >
-                    <span>Recorrido</span>
-                    <Icons.ChevronRight size={12} />
-                  </button>
                 </td>
               </tr>
             ))}
