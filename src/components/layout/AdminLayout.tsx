@@ -237,31 +237,24 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     <div className="min-h-screen bg-tech-carbon text-tech-text flex flex-col md:flex-row font-sans relative">
       {/* Mobile Header Bar */}
       {isMobile && (
-        <header className="flex md:hidden bg-tech-card border-b border-tech-border px-4 pb-3.5 pt-[max(5vh,env(safe-area-inset-top))] justify-between items-center sticky top-0 z-40">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-tech-yellow rounded-sm flex items-center justify-center text-tech-carbon">
+        <header className="flex md:hidden bg-tech-card border-b border-tech-border px-4 pb-3.5 pt-[var(--safe-top)] items-center gap-2 sticky top-0 z-40">
+          {/* Menú a la izquierda; salir del panel está dentro del menú. */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 -ml-2 text-tech-text hover:text-tech-yellow transition-colors"
+            aria-label="Abrir Menú"
+            aria-expanded={isMobileMenuOpen}
+          >
+            {isMobileMenuOpen ? <Icons.X size={20} /> : <Icons.Menu size={20} />}
+          </button>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 bg-tech-yellow rounded-sm flex items-center justify-center text-tech-carbon shrink-0">
               <Icons.Shield size={16} />
             </div>
-            <div className="flex flex-col">
-              <span className="font-mono font-bold uppercase tracking-tighter text-xs">Escapes <span className="text-tech-yellow">{isAdvisor ? 'Asesores' : 'Panel'}</span></span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono font-bold uppercase tracking-tighter text-xs truncate">Escapes <span className="text-tech-yellow">{isAdvisor ? 'Asesores' : 'Panel'}</span></span>
               <span className="text-[7px] text-tech-muted font-mono uppercase tracking-widest">{isAdvisor ? 'Panel de asesor' : 'Master Admin'}</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={onLogout}
-              className="p-1.5 text-tech-muted hover:text-tech-text transition-colors"
-              title="Salir del Panel"
-            >
-              <Icons.LogOut size={16} />
-            </button>
-            <button 
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-1.5 text-tech-text hover:text-tech-yellow transition-colors"
-              aria-label="Abrir Menú"
-            >
-              {isMobileMenuOpen ? <Icons.X size={18} /> : <Icons.Menu size={18} />}
-            </button>
           </div>
         </header>
       )}
@@ -277,7 +270,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {/* Mobile Sidebar Navigation Drawer */}
       {isMobile && isMobileMenuOpen && (
         <aside className="fixed left-0 top-0 bottom-0 w-64 bg-tech-card border-r border-tech-border z-50 flex flex-col h-full md:hidden shadow-2xl">
-          <div className="px-6 pb-6 pt-[max(5vh,env(safe-area-inset-top))] border-b border-tech-border flex items-center justify-between">
+          <div className="px-6 pb-6 pt-[var(--safe-top)] border-b border-tech-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-tech-yellow rounded-md flex items-center justify-center text-tech-carbon shadow-lg shadow-yellow-500/20">
                 <Icons.Shield className="w-5 h-5" />

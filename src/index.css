@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Margen superior de lo que va pegado al borde de arriba en el móvil (cabecera, menú y paneles laterales). Con la app instalada
+   en el iPhone la barra de estado se dibuja ENCIMA de la página (black-translucent) y algunas versiones de iOS dan
+   env(safe-area-inset-top) = 0: se deja un mínimo de 3,75 rem para que nada quede bajo la hora. En el navegador normal basta
+   un margen pequeño (antes era el 5 % del alto de pantalla, ~40 px de más). */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), 0.75rem);
+}
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --safe-top: max(env(safe-area-inset-top, 0px), 3.75rem);
+    }
+  }
+}
+
 @layer base {
   html, body {
     touch-action: manipulation;
