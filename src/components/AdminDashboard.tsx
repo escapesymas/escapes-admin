@@ -29,7 +29,8 @@ import ConfirmModal from './modals/ConfirmModal';
 import ErrorBoundary from './ErrorBoundary';
 import { useToast } from './ToastContext';
 import { formatPrice, formatEuros } from '../utils/format';
-import { NotificationHistory, NotificationSettings } from './NotificationPanels';
+import { NotificationHistory } from './NotificationPanels';
+import { SettingsTab } from './tabs/SettingsTab';
 import type { Order, Product, User, Cart, CartItem, OrderNote, OrderItem, AdminSession } from '../types/admin';
 
 /** Último módulo abierto: al recargar (o reabrir la app de inicio del iPhone) se vuelve a él, no al Dashboard. */
@@ -648,7 +649,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'account-security' && 'Seguridad de tu cuenta'}
             </h1>
             <p className="text-tech-muted text-xs mt-1 font-medium">
-              {activeTab === 'stats' && 'Vista general del rendimiento del e-commerce.'}
+              {activeTab === 'stats' && 'Informe completo de la tienda: ventas, visitas, carritos y atención, por periodos, con informe de IA y PDF.'}
               {activeTab === 'analytics' && 'Telemetría de visitantes en tiempo real, páginas activas y analítica SEO.'}
               {activeTab === 'orders' && 'Gestiona los estados de los pagos y envíos en PostgreSQL.'}
               {activeTab === 'products' && 'Añade, edita o elimina recambios y su compatibilidad.'}
@@ -659,7 +660,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'notifications' && 'Historial de los avisos del panel.'}
-              {activeTab === 'settings' && 'Qué avisos recibir y en qué dispositivos.'}
+              {activeTab === 'settings' && 'Avisos del panel (qué recibir y en qué dispositivos) y estado del servidor.'}
               {activeTab === 'chat' && (isAdvisor ? 'Clientes que el asistente IA te ha pasado. Responde aquí.' : 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.')}
               {activeTab === 'advisors' && 'Rendimiento de cada asesor, su % de comisión, lo que hay que pagarle y avisos al equipo.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}
@@ -816,7 +817,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
 
         {activeTab === 'settings' && !isAdvisor && (
           <div className="py-4">
-            <NotificationSettings token={adminToken} onChange={() => getUnreadCount(adminToken).then(setUnreadNotifications)} />
+            <SettingsTab adminToken={adminToken} onNotificationsChange={() => getUnreadCount(adminToken).then(setUnreadNotifications)} />
           </div>
         )}
 
