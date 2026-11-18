@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 import { useToast } from '../ToastContext';
 import { formatPrice } from '../../utils/format';
+import { SessionDetailModal } from '../modals/SessionDetailModal';
+import { formatDurationShort } from '../analytics/analyticsUi';
+import type { CartSessionMatch } from '../../types/analytics';
 
 interface CartItem {
   id?: number;
@@ -51,6 +54,8 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
   const [selectedCart, setSelectedCart] = useState<RawCart | null>(null);
   const [sendingRecoveryId, setSendingRecoveryId] = useState<number | null>(null);
   const [deletingCartId, setDeletingCartId] = useState<number | null>(null);
+  const [journeyLoadingId, setJourneyLoadingId] = useState<number | null>(null);
+  const [journey, setJourney] = useState<{ cartId: number; match: CartSessionMatch } | null>(null);
 
   const fetchCarts = async () => {
     setLoading(true);
@@ -150,6 +155,26 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
       showToast('Error de conexión al enviar el correo.', 'error');
     } finally {
       setSendingRecoveryId(null);
+    }
+  };
+
+  /** Busca en las estadísticas la visita que creó el carrito y abre su recorrido (páginas y eventos). */
+  const handleViewJourney = async (cart: RawCart) => {
+    setJourneyLoadingId(cart.id);
+    try {
+      const res = await fetch(`/api/admin/analytics/cart-session?cartId=${cart.id}`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return showToast(data.error || 'No se pudo buscar la visita de este carrito', 'error');
+      if (!data.match) {
+        return showToast('No aparece la visita de este carrito en las estadísticas: puede que el visitante use un bloqueador de anuncios o que los datos ya no estén.', 'error');
+      }
+      setJourney({ cartId: cart.id, match: data.match });
+    } catch (e) {
+      showToast('Error de conexión al buscar la visita', 'error');
+    } finally {
+      setJourneyLoadingId(null);
     }
   };
 
@@ -370,6 +395,15 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
                           >
                             Inspeccionar
                           </button>
+                          <button
+                            onClick={() => handleViewJourney(c)}
+                            disabled={journeyLoadingId === c.id}
+                            className="bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 disabled:opacity-50"
+                            title="Ver las páginas que visitó y los eventos que registró quien creó este carrito"
+                          >
+                            {journeyLoadingId === c.id ? <Icons.Loader2 size={12} className="animate-spin" /> : <Icons.Footprints size={12} />}
+                            Recorrido
+                          </button>
                           {email !== 'Sin email registrado' && email !== 'Invitado' && (
                             <button
                               onClick={() => handleSendRecoveryEmail(c)}
@@ -484,6 +518,14 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
                 <span className="text-xs text-tech-muted uppercase font-bold">Total del Carrito:</span>
                 <div className="text-2xl font-black italic text-tech-yellow">{formatPrice(getCartTotalCents(selectedCart))}</div>
               </div>
+              <button
+                onClick={() => handleViewJourney(selectedCart)}
+                disabled={journeyLoadingId === selectedCart.id}
+                className="bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {journeyLoadingId === selectedCart.id ? <Icons.Loader2 size={14} className="animate-spin" /> : <Icons.Footprints size={14} />}
+                Ver recorrido
+              </button>
               {getCustomerEmail(selectedCart) !== 'Sin email registrado' && (
                 <button
                   onClick={() => handleSendRecoveryEmail(selectedCart)}
@@ -496,6 +538,37 @@ const CartsTab: React.FC<CartsTabProps> = ({ adminWpId, adminEmail, adminToken }
           </div>
         </div>
       )}
+      {/* Recorrido de la visita que creó el carrito */}
+      {journey && (
+        <SessionDetailModal
+          sessionId={journey.match.sessionId}
+          adminToken={adminToken}
+          onClose={() => setJourney(null)}
+          banner={(() => {
+            const m = journey.match;
+            const tone = m.confidence === 'alta'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              : m.confidence === 'media'
+                ? 'border-tech-yellow/40 bg-tech-yellow/10 text-tech-yellow'
+                : 'border-red-500/40 bg-red-500/10 text-red-300';
+            const gap = Math.abs(m.gapSeconds) < 5 ? 'justo antes' : `${formatDurationShort(Math.abs(m.gapSeconds))} antes`;
+            return (
+              <div className={`border rounded-md p-3 text-[11px] font-mono flex items-start gap-2 ${tone}`}>
+                <Icons.Link2 size={14} className="shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div>
+                    Visita del carrito <strong>#{journey.cartId}</strong> · coincidencia <strong>{m.confidence}</strong>: añadió {m.matched} de {m.total} {m.total === 1 ? 'producto' : 'productos'} del carrito
+                    {m.gapSeconds >= 0 ? `; el último, ${gap} de guardarse el carrito.` : '.'}
+                  </div>
+                  {m.otherCandidates > 0 && <div>{m.otherCandidates === 1 ? 'Otra visita añadió' : `Otras ${m.otherCandidates} visitas añadieron`} alguno de esos productos en las últimas semanas.</div>}
+                  <div className="text-tech-muted">El carrito y las estadísticas no comparten identificador: se han cruzado por los productos y la hora.</div>
+                </div>
+              </div>
+            );
+          })()}
+        />
+      )}
+
     </div>
   );
 };

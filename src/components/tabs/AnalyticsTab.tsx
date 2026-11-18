@@ -1,45 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Icons from 'lucide-react';
 import { SessionDetailModal } from '../modals/SessionDetailModal';
-
-interface RealtimeActiveUser {
-  sessionId: string;
-  city: string;
-  region: string;
-  country: string;
-  device: string;
-  os: string;
-  browser: string;
-  lastActiveAt: string;
-  sessionStart: string;
-  secondsAgo: number;
-  totalEvents: number;
-  currentPage: string;
-  pageTitle: string;
-  referrerDomain: string | null;
-}
-
-interface RealtimePageView {
-  eventId: string;
-  sessionId: string;
-  createdAt: string;
-  secondsAgo: number;
-  urlPath: string;
-  pageTitle: string;
-  referrerDomain: string | null;
-  city: string;
-  country: string;
-  device: string;
-}
-
-interface RealtimeData {
-  online5m: number;
-  online15m: number;
-  online30m: number;
-  users: RealtimeActiveUser[];
-  recentPageviews: RealtimePageView[];
-  timestamp: string;
-}
+import { HighlightsPanel } from '../analytics/HighlightsPanel';
+import { ConversionPanel } from '../analytics/ConversionPanel';
+import { VisitorList } from '../analytics/VisitorList';
+import { DeviceIcon, ReferrerBadge, formatSecondsAgo, TIER_RANK } from '../analytics/analyticsUi';
+import type { RealtimeData, RealtimeActiveUser, VisitorInsights, VisitorListItem } from '../../types/analytics';
+import { formatEuros } from '../../utils/format';
 
 interface AnalyticsStats {
   overview: {
@@ -59,6 +26,7 @@ interface AnalyticsStats {
   }[];
   topPages: {
     path: string;
+    title: string;
     views: number;
     visitors: number;
   }[];
@@ -97,14 +65,53 @@ interface AnalyticsTabProps {
 
 type TimeRange = 'today' | '24h' | '7d' | '30d' | 'all';
 
+const RANGE_LABEL: Record<TimeRange, string> = { today: 'hoy', '24h': 'últimas 24 h', '7d': '7 días', '30d': '30 días', all: 'histórico' };
+
+type KpiTone = 'emerald' | 'yellow' | 'orange' | 'pink' | 'purple' | 'blue';
+const KPI_TONES: Record<KpiTone, { box: string; hover: string; value: string }> = {
+  emerald: { box: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', hover: 'hover:border-emerald-500/50', value: 'text-emerald-400' },
+  yellow: { box: 'bg-tech-yellow/10 border-tech-yellow/20 text-tech-yellow', hover: 'hover:border-tech-yellow/50', value: 'text-tech-text' },
+  orange: { box: 'bg-orange-500/10 border-orange-500/20 text-orange-400', hover: 'hover:border-orange-500/50', value: 'text-orange-300' },
+  pink: { box: 'bg-pink-500/10 border-pink-500/20 text-pink-400', hover: 'hover:border-pink-500/50', value: 'text-pink-300' },
+  purple: { box: 'bg-purple-500/10 border-purple-500/20 text-purple-400', hover: 'hover:border-purple-500/50', value: 'text-tech-text' },
+  blue: { box: 'bg-blue-500/10 border-blue-500/20 text-blue-400', hover: 'hover:border-blue-500/50', value: 'text-tech-text' },
+};
+
+/** Indicador de la fila superior: número grande, qué es y un dato que lo acompaña. */
+const Kpi: React.FC<{
+  icon: React.ElementType; tone: KpiTone; value: React.ReactNode; label: string; sub: React.ReactNode; pulse?: boolean; onClick?: () => void;
+}> = ({ icon: Icon, tone, value, label, sub, pulse, onClick }) => {
+  const t = KPI_TONES[tone];
+  return (
+    <div
+      onClick={onClick}
+      className={`bg-tech-card border border-tech-border rounded-md p-4 flex flex-col justify-between ${t.hover} transition-colors shadow-lg ${onClick ? 'cursor-pointer' : ''}`}
+    >
+      <div className="flex justify-between items-start mb-3">
+        <div className={`p-2 border rounded-md ${t.box}`}><Icon className={`w-4 h-4 ${pulse ? 'animate-pulse' : ''}`} /></div>
+        <span className={`text-2xl font-mono font-bold ${t.value}`}>{value}</span>
+      </div>
+      <div>
+        <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">{label}</div>
+        <div className="text-[11px] text-tech-text/70 font-mono mt-1">{sub}</div>
+      </div>
+    </div>
+  );
+};
+
+type SubTab = 'highlights' | 'realtime' | 'conversion' | 'overview' | 'pages' | 'sources' | 'tech';
+
 export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnlineCountChange }) => {
   const [range, setRange] = useState<TimeRange>('today');
   const [excludeInternal, setExcludeInternal] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState<'realtime' | 'overview' | 'pages' | 'sources' | 'tech'>('realtime');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('highlights');
 
   const [realtime, setRealtime] = useState<RealtimeData | null>(null);
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
+  const [insights, setInsights] = useState<VisitorInsights | null>(null);
+  const [liveSort, setLiveSort] = useState<'priority' | 'recent'>('priority');
+  const [showBounces, setShowBounces] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,17 +159,29 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
     }
   }, [adminToken, range, excludeInternal]);
 
+  // Visitantes por prioridad, embudo, eventos y búsquedas del periodo
+  const fetchInsights = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/analytics/visitors?range=${range}&excludeInternal=${excludeInternal}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (res.ok) setInsights(await res.json());
+    } catch (err: any) {
+      console.error('[FETCH VISITOR INSIGHTS ERROR]:', err);
+    }
+  }, [adminToken, range, excludeInternal]);
+
   // Carga inicial
   useEffect(() => {
     let mounted = true;
     const loadAll = async () => {
       setLoading(true);
-      await Promise.all([fetchRealtime(false), fetchStats()]);
+      await Promise.all([fetchRealtime(false), fetchStats(), fetchInsights()]);
       if (mounted) setLoading(false);
     };
     loadAll();
     return () => { mounted = false; };
-  }, [fetchRealtime, fetchStats]);
+  }, [fetchRealtime, fetchStats, fetchInsights]);
 
   // Bucle de auto-refresco (cada 5s para tiempo real, cada 30s para acumulado)
   useEffect(() => {
@@ -174,82 +193,36 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
 
     const statsInterval = setInterval(() => {
       fetchStats();
+      fetchInsights();
     }, 30000);
 
     return () => {
       clearInterval(rtInterval);
       clearInterval(statsInterval);
     };
-  }, [autoRefresh, fetchRealtime, fetchStats]);
+  }, [autoRefresh, fetchRealtime, fetchStats, fetchInsights]);
 
-  const formatSecondsAgo = (seconds: number) => {
-    if (seconds < 20) return 'Activo ahora';
-    if (seconds < 60) return `Hace ${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    if (mins < 60) return `Hace ${mins} min`;
-    const hours = Math.floor(mins / 60);
-    return `Hace ${hours}h`;
-  };
+  const getDeviceIcon = (device: string) => <DeviceIcon device={device} />;
+  const getReferrerBadge = (referrer: string | null) => <ReferrerBadge referrer={referrer} />;
 
-  const getDeviceIcon = (device: string) => {
-    const d = device.toLowerCase();
-    if (d.includes('mobile')) {
-      return (
-        <span title="Móvil">
-          <Icons.Smartphone className="w-3.5 h-3.5 text-tech-yellow" />
-        </span>
-      );
-    }
-    if (d.includes('tablet')) {
-      return (
-        <span title="Tablet">
-          <Icons.Tablet className="w-3.5 h-3.5 text-blue-400" />
-        </span>
-      );
-    }
-    return (
-      <span title="Ordenador">
-        <Icons.Monitor className="w-3.5 h-3.5 text-purple-400" />
-      </span>
-    );
-  };
-
-  const getReferrerBadge = (referrer: string | null) => {
-    if (!referrer || referrer === '') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
-          <Icons.Compass className="w-3 h-3" /> Directo
-        </span>
-      );
-    }
-    const ref = referrer.toLowerCase();
-    if (ref.includes('googlequicksearchbox') || ref.includes('quicksearchbox') || ref.includes('google')) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <Icons.Search className="w-3 h-3" /> {ref.includes('quicksearchbox') ? 'Google (App)' : 'Google'}
-        </span>
-      );
-    }
-    if (ref.includes('instagram') || ref.includes('tiktok') || ref.includes('facebook')) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-pink-500/10 text-pink-400 border border-pink-500/20">
-          <Icons.Share2 className="w-3 h-3" /> Social
-        </span>
-      );
-    }
-    if (ref.includes('escapesymas')) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-tech-carbon text-tech-muted border border-tech-border">
-          Interno
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-        <Icons.Globe className="w-3 h-3" /> {referrer}
-      </span>
-    );
-  };
+  // En directo: prioridad (calientes primero, después más páginas y acciones) o lo más reciente. Los rebotes, ocultos.
+  const liveItems: VisitorListItem[] = (() => {
+    const q = sessionSearch.trim().toLowerCase();
+    const users = (realtime?.users || []).filter((u: RealtimeActiveUser) =>
+      !q || [u.city, u.currentPage, u.pageTitle, u.os, u.referrerDomain || '', ...u.searches, ...u.bikes].some((t) => t.toLowerCase().includes(q)));
+    const sorted = [...users].sort((a, b) =>
+      liveSort === 'recent'
+        ? a.secondsAgo - b.secondsAgo
+        : TIER_RANK[a.tier] - TIER_RANK[b.tier] || b.score - a.score || a.secondsAgo - b.secondsAgo);
+    return sorted.map((u) => ({
+      sessionId: u.sessionId, city: u.city, region: u.region, country: u.country, device: u.device, os: u.os, browser: u.browser,
+      secondsAgo: u.secondsAgo, referrer: u.referrerDomain, page: u.currentPage, pageTitle: u.pageTitle,
+      signals: u.signals, tier: u.tier, score: u.score, cartValue: u.cartValue, searches: u.searches, bikes: u.bikes,
+    }));
+  })();
+  const liveBounces = liveItems.filter((i) => i.tier === 'bounce').length;
+  const liveVisible = showBounces || liveSort === 'recent' ? liveItems : liveItems.filter((i) => i.tier !== 'bounce');
+  const hotNow = (realtime?.users || []).filter((u) => u.tier === 'hot').length;
 
   return (
     <div className="space-y-6 animate-fade-in text-tech-text min-w-0 max-w-full">
@@ -298,6 +271,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
             onClick={() => {
               fetchRealtime(false);
               fetchStats();
+              fetchInsights();
             }}
             disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-tech-border bg-tech-carbon text-tech-text hover:border-tech-yellow hover:text-tech-yellow text-xs font-mono uppercase tracking-wider transition-all disabled:opacity-50"
@@ -354,173 +328,132 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
         </div>
       )}
 
-      {/* 2. Tarjetas de Usuarios en Línea y KPIs en Directo */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        {/* KPI 1: Online Ahora */}
-        <div className="bg-tech-card border border-tech-border rounded-md p-5 flex flex-col justify-between hover:border-emerald-500/50 transition-colors shadow-lg">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-400">
-              <Icons.Radio className="w-5 h-5 animate-pulse" />
-            </div>
-            <span className="text-3xl font-mono font-bold text-emerald-400">
-              {realtime ? realtime.online5m : <Icons.Loader2 className="animate-spin w-6 h-6 inline" />}
-            </span>
-          </div>
-          <div>
-            <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">
-              Usuarios en línea (últimos 5m)
-            </div>
-            <div className="text-[11px] text-tech-text/70 font-mono mt-1">
-              {realtime?.online15m || 0} activos en los últimos 15 min
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 2: Total Visitantes Periodo */}
-        <div className="bg-tech-card border border-tech-border rounded-md p-5 flex flex-col justify-between hover:border-tech-yellow/50 transition-colors shadow-lg">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2.5 bg-tech-carbon border border-tech-border rounded-md text-tech-yellow">
-              <Icons.Users className="w-5 h-5" />
-            </div>
-            <span className="text-3xl font-mono font-bold text-tech-text">
-              {stats?.overview.totalVisitors ?? (loading ? '...' : 0)}
-            </span>
-          </div>
-          <div>
-            <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">
-              Visitantes Únicos ({range === 'today' ? 'Hoy' : range})
-            </div>
-            <div className="text-[11px] text-tech-text/70 font-mono mt-1">
-              {stats?.overview.mobilePercent ?? 0}% desde dispositivos móviles
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 3: Páginas Vistas */}
-        <div className="bg-tech-card border border-tech-border rounded-md p-5 flex flex-col justify-between hover:border-blue-500/50 transition-colors shadow-lg">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-400">
-              <Icons.Eye className="w-5 h-5" />
-            </div>
-            <span className="text-3xl font-mono font-bold text-tech-text">
-              {stats?.overview.totalPageviews ?? (loading ? '...' : 0)}
-            </span>
-          </div>
-          <div>
-            <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">
-              Páginas Vistas Totales
-            </div>
-            <div className="text-[11px] text-tech-text/70 font-mono mt-1">
-              Promedio: {stats?.overview.avgPagesPerVisit ?? 0} págs / sesión
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 4: Google Orgánico */}
-        <div className="bg-tech-card border border-tech-border rounded-md p-5 flex flex-col justify-between hover:border-purple-500/50 transition-colors shadow-lg">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-md text-purple-400">
-              <Icons.Search className="w-5 h-5" />
-            </div>
-            <span className="text-3xl font-mono font-bold text-tech-text">
-              {stats?.overview.googleVisitors ?? (loading ? '...' : 0)}
-            </span>
-          </div>
-          <div>
-            <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest">
-              Tráfico Orgánico de Google
-            </div>
-            <div className="text-[11px] text-tech-text/70 font-mono mt-1">
-              {stats && stats.overview.totalVisitors > 0
-                ? `${Math.round((stats.overview.googleVisitors / stats.overview.totalVisitors) * 100)}% del total`
-                : 'Búsquedas SEO'}
-            </div>
-          </div>
-        </div>
+      {/* 2. Indicadores: lo más relevante a simple vista */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        <Kpi
+          icon={Icons.Radio}
+          tone="emerald"
+          pulse
+          value={realtime ? realtime.online5m : <Icons.Loader2 className="animate-spin w-5 h-5 inline" />}
+          label="En línea ahora"
+          sub={<>{realtime?.online15m || 0} en 15 min{hotNow > 0 && <span className="text-orange-300"> · {hotNow} {hotNow === 1 ? 'caliente' : 'calientes'}</span>}</>}
+          onClick={() => setActiveSubTab('realtime')}
+        />
+        <Kpi
+          icon={Icons.Users}
+          tone="yellow"
+          value={stats?.overview.totalVisitors ?? (loading ? '...' : 0)}
+          label={`Visitantes únicos (${RANGE_LABEL[range]})`}
+          sub={`${stats?.overview.totalPageviews ?? 0} págs · ${stats?.overview.avgPagesPerVisit ?? 0} por visita · ${stats?.overview.mobilePercent ?? 0}% móvil`}
+        />
+        <Kpi
+          icon={Icons.Flame}
+          tone="orange"
+          value={insights ? insights.summary.tiers.hot + insights.summary.tiers.engaged : (loading ? '...' : 0)}
+          label="Con interés"
+          sub={insights && insights.summary.visitors > 0
+            ? `${Math.round(((insights.summary.tiers.hot + insights.summary.tiers.engaged) / insights.summary.visitors) * 100)}% de los visitantes · ${Math.round((insights.summary.tiers.bounce / insights.summary.visitors) * 100)}% rebote`
+            : 'Varias páginas o acciones importantes'}
+          onClick={() => setActiveSubTab('highlights')}
+        />
+        <Kpi
+          icon={Icons.ShoppingCart}
+          tone="yellow"
+          value={insights?.summary.funnel.addToCart ?? (loading ? '...' : 0)}
+          label="Añadieron al carrito"
+          sub={insights && insights.summary.cartValue > 0 ? `${formatEuros(insights.summary.cartValue)} en carritos` : 'Nadie en este periodo'}
+          onClick={() => setActiveSubTab('conversion')}
+        />
+        <Kpi
+          icon={Icons.CreditCard}
+          tone="pink"
+          value={insights?.summary.funnel.checkout ?? (loading ? '...' : 0)}
+          label="Empezaron a pagar"
+          sub={insights?.summary.funnel.purchase === 1 ? '1 compra registrada' : `${insights?.summary.funnel.purchase ?? 0} compras registradas`}
+          onClick={() => setActiveSubTab('conversion')}
+        />
+        <Kpi
+          icon={Icons.Search}
+          tone="purple"
+          value={stats?.overview.googleVisitors ?? (loading ? '...' : 0)}
+          label="Desde Google"
+          sub={stats && stats.overview.totalVisitors > 0
+            ? `${Math.round((stats.overview.googleVisitors / stats.overview.totalVisitors) * 100)}% del total`
+            : 'Búsquedas SEO'}
+        />
       </div>
 
       {/* 3. Navegación por Subpestañas del Módulo */}
       <div className="flex items-center gap-2 border-b border-tech-border overflow-x-auto pb-1">
-        <button
-          onClick={() => setActiveSubTab('realtime')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-            activeSubTab === 'realtime'
-              ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
-              : 'border-transparent text-tech-muted hover:text-tech-text'
-          }`}
-        >
-          <Icons.Radio className="w-4 h-4 text-emerald-400" />
-          <span>En Directo ({realtime?.users.length || 0})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('overview')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-            activeSubTab === 'overview'
-              ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
-              : 'border-transparent text-tech-muted hover:text-tech-text'
-          }`}
-        >
-          <Icons.BarChart2 className="w-4 h-4" />
-          <span>Evolución Temporal</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('pages')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-            activeSubTab === 'pages'
-              ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
-              : 'border-transparent text-tech-muted hover:text-tech-text'
-          }`}
-        >
-          <Icons.FileText className="w-4 h-4" />
-          <span>Páginas y Modelos ({stats?.topPages.length || 0})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('sources')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-            activeSubTab === 'sources'
-              ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
-              : 'border-transparent text-tech-muted hover:text-tech-text'
-          }`}
-        >
-          <Icons.Compass className="w-4 h-4" />
-          <span>Fuentes y Ciudades</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('tech')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-            activeSubTab === 'tech'
-              ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
-              : 'border-transparent text-tech-muted hover:text-tech-text'
-          }`}
-        >
-          <Icons.Cpu className="w-4 h-4" />
-          <span>Dispositivos y SO</span>
-        </button>
+        {([
+          { id: 'highlights', label: `Destacados (${insights ? insights.summary.tiers.hot + insights.summary.tiers.engaged : 0})`, icon: Icons.Flame, iconCls: 'text-orange-400' },
+          { id: 'realtime', label: `En directo (${realtime?.users.length || 0})`, icon: Icons.Radio, iconCls: 'text-emerald-400' },
+          { id: 'conversion', label: 'Conversión y búsquedas', icon: Icons.TrendingUp, iconCls: '' },
+          { id: 'overview', label: 'Evolución temporal', icon: Icons.BarChart2, iconCls: '' },
+          { id: 'pages', label: `Páginas y modelos (${stats?.topPages.length || 0})`, icon: Icons.FileText, iconCls: '' },
+          { id: 'sources', label: 'Fuentes y ciudades', icon: Icons.Compass, iconCls: '' },
+          { id: 'tech', label: 'Dispositivos y SO', icon: Icons.Cpu, iconCls: '' },
+        ] as { id: SubTab; label: string; icon: React.ElementType; iconCls: string }[]).map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveSubTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                activeSubTab === t.id
+                  ? 'border-tech-yellow text-tech-yellow font-bold bg-tech-card/50'
+                  : 'border-transparent text-tech-muted hover:text-tech-text'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${t.iconCls}`} />
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* 4. CONTENIDO: SUBPESTAÑA EN DIRECTO */}
+      {/* 4a. CONTENIDO: VISITANTES DESTACADOS DEL PERIODO */}
+      {activeSubTab === 'highlights' && (
+        <HighlightsPanel insights={insights} loading={loading} rangeLabel={RANGE_LABEL[range]} onSelect={setSelectedSessionId} />
+      )}
+
+      {/* 4b. CONTENIDO: EMBUDO, EVENTOS Y BÚSQUEDAS */}
+      {activeSubTab === 'conversion' && (
+        <ConversionPanel insights={insights} loading={loading} rangeLabel={RANGE_LABEL[range]} />
+      )}
+
+      {/* 4c. CONTENIDO: SUBPESTAÑA EN DIRECTO */}
       {activeSubTab === 'realtime' && (
         <div className="space-y-6">
           {/* Bloque de Usuarios Activos Ahora */}
           <div className="bg-tech-card border border-tech-border rounded-md shadow-xl overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-tech-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-6 border-b border-tech-border flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm font-mono uppercase tracking-wider flex items-center gap-2 text-tech-text">
                   <Icons.Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  Sesiones Activas en los Últimos 30 Minutos
+                  Sesiones activas en los últimos 30 minutos
                 </h3>
                 <p className="text-[11px] text-tech-muted font-mono mt-1">
-                  Toca o haz clic en cualquier visitante para ver todas sus páginas, búsquedas y recorrido completo.
+                  Las cifras son de toda su visita actual. Toca un visitante para ver sus páginas, búsquedas y recorrido completo.
                 </p>
               </div>
 
-              {/* Buscador de sesiones */}
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="relative w-full sm:w-64">
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                {/* Orden: prioridad o más recientes */}
+                <div className="flex rounded border border-tech-border overflow-hidden text-[10px] font-mono uppercase">
+                  {([['priority', 'Por prioridad'], ['recent', 'Más recientes']] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      onClick={() => setLiveSort(id)}
+                      className={`px-3 py-1.5 transition-colors ${liveSort === id ? 'bg-tech-yellow text-black font-bold' : 'bg-tech-carbon text-tech-muted hover:text-tech-text'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Buscador de sesiones */}
+                <div className="relative w-full sm:w-56">
                   <Icons.Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-tech-muted" />
                   <input
                     type="text"
@@ -530,10 +463,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                     className="w-full bg-tech-carbon border border-tech-border rounded px-3 py-1.5 pl-8 text-xs font-mono text-tech-text focus:border-tech-yellow focus:outline-none"
                   />
                   {sessionSearch && (
-                    <button
-                      onClick={() => setSessionSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-tech-muted hover:text-tech-text"
-                    >
+                    <button onClick={() => setSessionSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-tech-muted hover:text-tech-text">
                       <Icons.X size={12} />
                     </button>
                   )}
@@ -545,260 +475,31 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
               </div>
             </div>
 
-            {/* VISTA MÓVIL: Tarjetas legibles sin scroll horizontal incómodo */}
-            <div className="block md:hidden divide-y divide-tech-border">
-              {(() => {
-                const filtered = (realtime?.users || []).filter((u) => {
-                  if (!sessionSearch.trim()) return true;
-                  const q = sessionSearch.toLowerCase();
-                  return (
-                    u.city.toLowerCase().includes(q) ||
-                    u.currentPage.toLowerCase().includes(q) ||
-                    u.pageTitle.toLowerCase().includes(q) ||
-                    u.os.toLowerCase().includes(q) ||
-                    (u.referrerDomain && u.referrerDomain.toLowerCase().includes(q))
-                  );
-                });
+            <VisitorList
+              items={liveVisible}
+              onSelect={setSelectedSessionId}
+              pageLabel="Página actual"
+              ariaLabel="Tabla de usuarios activos en tiempo real"
+              emptyMessage={
+                realtime?.users.length === 0
+                  ? 'No hay visitantes activos en este momento. Los nuevos accesos aparecerán aquí en vivo en cuanto entren a la web.'
+                  : liveItems.length === 0
+                    ? 'No hay sesiones que coincidan con el filtro.'
+                    : 'Ahora mismo solo hay visitantes que han visto una página.'
+              }
+            />
 
-                if (filtered.length === 0) {
-                  return (
-                    <div className="px-4 py-12 text-center text-tech-muted text-xs font-mono">
-                      No hay sesiones que coincidan con la búsqueda.
-                    </div>
-                  );
-                }
-
-                return filtered.map((user) => {
-                  const isSuperFresh = user.secondsAgo <= 60;
-                  return (
-                    <div
-                      key={user.sessionId}
-                      onClick={() => setSelectedSessionId(user.sessionId)}
-                      className={`p-4 space-y-3 cursor-pointer hover:bg-[#1a1b1e] active:bg-[#222428] transition-colors ${
-                        isSuperFresh ? 'bg-emerald-500/[0.04]' : ''
-                      }`}
-                    >
-                      {/* Fila superior: Estado + Ubicación + Referrer */}
-                      <div className="flex items-center justify-between gap-2 text-xs font-mono">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full ${
-                              isSuperFresh
-                                ? 'bg-emerald-500 animate-ping'
-                                : user.secondsAgo <= 300
-                                ? 'bg-emerald-500'
-                                : 'bg-zinc-600'
-                            }`}
-                          />
-                          <span
-                            className={`text-[11px] font-bold ${
-                              isSuperFresh ? 'text-emerald-400' : 'text-tech-text'
-                            }`}
-                          >
-                            {formatSecondsAgo(user.secondsAgo)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-tech-muted flex items-center gap-1 font-mono">
-                            <Icons.MapPin size={12} className="text-tech-yellow" />
-                            {user.city} ({user.country})
-                          </span>
-                          {getReferrerBadge(user.referrerDomain)}
-                        </div>
-                      </div>
-
-                      {/* Fila central: Página que está viendo */}
-                      <div className="bg-tech-carbon p-3 rounded border border-tech-border/80">
-                        <div className="text-[9px] text-tech-muted font-mono uppercase tracking-wider mb-0.5">
-                          Página actual
-                        </div>
-                        <div className="text-xs font-mono font-bold text-tech-yellow truncate flex items-center gap-1">
-                          <span className="truncate">{user.currentPage}</span>
-                          <Icons.ExternalLink size={12} className="opacity-60 flex-shrink-0" />
-                        </div>
-                        {user.pageTitle && (
-                          <div className="text-[10px] text-tech-muted truncate mt-0.5">
-                            {user.pageTitle}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Fila inferior: Dispositivo + Llamada a inspección */}
-                      <div className="flex items-center justify-between text-xs font-mono pt-0.5">
-                        <div className="flex items-center gap-1.5 text-tech-muted text-[11px]">
-                          {getDeviceIcon(user.device)}
-                          <span>{user.os} · {user.browser}</span>
-                        </div>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-tech-yellow font-bold bg-tech-yellow/10 px-2.5 py-1 rounded border border-tech-yellow/20">
-                          <span>{user.totalEvents} {user.totalEvents === 1 ? 'pág' : 'págs'} · Ver recorrido</span>
-                          <Icons.ArrowRight size={12} />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* VISTA ESCRITORIO: Tabla completa con sticky headers y clic para inspección */}
-            <div
-              tabIndex={0}
-              role="region"
-              aria-label="Tabla de usuarios activos en tiempo real"
-              className="hidden md:block overflow-x-auto max-h-[600px] focus:outline-none focus:ring-1 focus:ring-tech-yellow/50"
-            >
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 z-10 bg-tech-carbon text-[9px] text-tech-muted font-mono uppercase tracking-widest border-b border-tech-border shadow-sm">
-                  <tr>
-                    <th className="px-4 sm:px-6 py-3.5">Estado</th>
-                    <th className="px-4 sm:px-6 py-3.5">Ubicación</th>
-                    <th className="px-4 sm:px-6 py-3.5">Página Actual</th>
-                    <th className="px-4 sm:px-6 py-3.5">Origen / Referrer</th>
-                    <th className="px-4 sm:px-6 py-3.5">Dispositivo</th>
-                    <th className="px-4 sm:px-6 py-3.5 text-right">Eventos</th>
-                    <th className="px-4 sm:px-6 py-3.5 text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-tech-border">
-                  {(() => {
-                    const filtered = (realtime?.users || []).filter((u) => {
-                      if (!sessionSearch.trim()) return true;
-                      const q = sessionSearch.toLowerCase();
-                      return (
-                        u.city.toLowerCase().includes(q) ||
-                        u.currentPage.toLowerCase().includes(q) ||
-                        u.pageTitle.toLowerCase().includes(q) ||
-                        u.os.toLowerCase().includes(q) ||
-                        (u.referrerDomain && u.referrerDomain.toLowerCase().includes(q))
-                      );
-                    });
-
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-tech-muted text-xs font-mono">
-                            {realtime?.users.length === 0
-                              ? 'No hay visitantes activos en este momento. Los nuevos accesos aparecerán aquí en vivo en cuanto entren a la web.'
-                              : 'No hay sesiones que coincidan con el filtro.'}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return filtered.map((user) => {
-                      const isSuperFresh = user.secondsAgo <= 60;
-                      return (
-                        <tr
-                          key={user.sessionId}
-                          onClick={() => setSelectedSessionId(user.sessionId)}
-                          className={`hover:bg-[#1a1b1e] cursor-pointer transition-colors ${
-                            isSuperFresh ? 'bg-emerald-500/[0.03]' : ''
-                          }`}
-                        >
-                          {/* Estado / Tiempo transcurrido */}
-                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                  isSuperFresh
-                                    ? 'bg-emerald-500 animate-ping'
-                                    : user.secondsAgo <= 300
-                                    ? 'bg-emerald-500'
-                                    : 'bg-zinc-600'
-                                }`}
-                              />
-                              <span
-                                className={`text-[11px] font-mono font-medium ${
-                                  isSuperFresh
-                                    ? 'text-emerald-400 font-bold'
-                                    : user.secondsAgo <= 300
-                                    ? 'text-emerald-300'
-                                    : 'text-tech-muted'
-                                }`}
-                              >
-                                {formatSecondsAgo(user.secondsAgo)}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Ubicación */}
-                          <td className="px-4 sm:px-6 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <Icons.MapPin className="w-3.5 h-3.5 text-tech-yellow flex-shrink-0" />
-                              <div className="flex flex-col">
-                                <span className="text-xs font-mono font-medium text-tech-text">
-                                  {user.city}
-                                </span>
-                                <span className="text-[10px] text-tech-muted font-mono">
-                                  {user.region ? `${user.region}, ` : ''}{user.country}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Página actual que está viendo */}
-                          <td className="px-4 sm:px-6 py-3.5">
-                            <div className="flex flex-col gap-0.5 max-w-md">
-                              <a
-                                href={`https://escapesymas.com${user.currentPage}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-xs font-mono text-tech-yellow hover:underline truncate flex items-center gap-1"
-                                title={user.currentPage}
-                              >
-                                <span className="truncate">{user.currentPage}</span>
-                                <Icons.ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
-                              </a>
-                              {user.pageTitle && (
-                                <span className="text-[10px] text-tech-muted truncate" title={user.pageTitle}>
-                                  {user.pageTitle}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Origen / Referrer */}
-                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                            {getReferrerBadge(user.referrerDomain)}
-                          </td>
-
-                          {/* Dispositivo y Navegador */}
-                          <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {getDeviceIcon(user.device)}
-                              <div className="flex flex-col text-[11px] font-mono">
-                                <span className="text-tech-text">{user.os}</span>
-                                <span className="text-[9px] text-tech-muted">{user.browser}</span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Total eventos */}
-                          <td className="px-4 sm:px-6 py-3.5 text-right font-mono text-xs text-tech-muted">
-                            {user.totalEvents} {user.totalEvents === 1 ? 'vista' : 'vistas'}
-                          </td>
-
-                          {/* Botón Ver Recorrido */}
-                          <td className="px-4 sm:px-6 py-3.5 text-right whitespace-nowrap">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedSessionId(user.sessionId);
-                              }}
-                              className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-tech-text hover:text-tech-yellow border border-tech-border hover:border-tech-yellow px-2.5 py-1 rounded transition-colors"
-                            >
-                              <span>Recorrido</span>
-                              <Icons.ChevronRight size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
-            </div>
+            {liveSort === 'priority' && liveBounces > 0 && (
+              <button
+                onClick={() => setShowBounces(!showBounces)}
+                className="w-full px-4 py-3 border-t border-tech-border text-[11px] font-mono text-tech-muted hover:text-tech-yellow hover:bg-[#1a1b1e] transition-colors flex items-center justify-center gap-2"
+              >
+                <Icons.ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBounces ? 'rotate-180' : ''}`} />
+                {showBounces
+                  ? 'Ocultar los visitantes de una sola página'
+                  : `Mostrar ${liveBounces} ${liveBounces === 1 ? 'visitante que solo ha visto' : 'visitantes que solo han visto'} 1 página`}
+              </button>
+            )}
           </div>
 
           {/* Feed de Páginas Vistas Recientes (Actividad en Vivo) */}
@@ -1034,17 +735,22 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                     return (
                       <tr key={page.path} className="hover:bg-[#1a1b1e] transition-colors">
                         <td className="px-6 py-3.5 font-mono text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-tech-muted text-[10px] w-5">#{idx + 1}</span>
-                            <a
-                              href={`https://escapesymas.com${page.path}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-tech-text hover:text-tech-yellow hover:underline truncate max-w-lg flex items-center gap-1.5"
-                            >
-                              <span className="truncate">{page.path}</span>
-                              <Icons.ExternalLink className="w-3 h-3 flex-shrink-0 opacity-50" />
-                            </a>
+                          <div className="flex items-start gap-2">
+                            <span className="text-tech-muted text-[10px] w-5 pt-0.5">#{idx + 1}</span>
+                            <div className="flex flex-col min-w-0">
+                              <a
+                                href={`https://escapesymas.com${page.path}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-tech-text hover:text-tech-yellow hover:underline truncate max-w-lg flex items-center gap-1.5"
+                              >
+                                <span className="truncate">{page.path}</span>
+                                <Icons.ExternalLink className="w-3 h-3 flex-shrink-0 opacity-50" />
+                              </a>
+                              {page.title && (
+                                <span className="text-[10px] text-tech-muted truncate max-w-lg" title={page.title}>{page.title}</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-3.5 whitespace-nowrap">
@@ -1066,6 +772,11 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                           {isUniversales && (
                             <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded text-[10px] font-mono">
                               Catálogo
+                            </span>
+                          )}
+                          {!isEscape && !isProduct && !isHome && !isUniversales && (
+                            <span className="bg-tech-carbon text-tech-muted border border-tech-border px-2 py-0.5 rounded text-[10px] font-mono">
+                              Otra
                             </span>
                           )}
                         </td>

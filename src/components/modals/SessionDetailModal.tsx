@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
+import { SignalChips, TierBadge } from '../analytics/analyticsUi';
+import type { VisitorSignals, VisitorTier } from '../../types/analytics';
 
 export interface SessionEventItem {
   eventId: string;
   createdAt: string;
   timeFormatted: string;
+  dateFormatted: string;
   secondsFromStart: number;
   timeOnPageSeconds: number | null;
   eventType: number;
@@ -38,6 +41,7 @@ export interface SessionDetailData {
     utmMedium?: string | null;
     utmCampaign?: string | null;
   };
+  summary: { signals: VisitorSignals; tier: VisitorTier; score: number; cartValue: number };
   events: SessionEventItem[];
 }
 
@@ -45,12 +49,28 @@ interface SessionDetailModalProps {
   sessionId: string | null;
   adminToken: string;
   onClose: () => void;
+  /** Aviso bajo la cabecera (p. ej. cómo se ha encontrado esta visita a partir de un carrito). */
+  banner?: React.ReactNode;
 }
+
+/** Eventos que importan: cómo se rotulan en el recorrido y qué color llevan. */
+const EVENT_META: Record<string, { label: string; icon: React.ElementType; node: string; badge: string }> = {
+  add_to_cart: { label: 'Añadió al carrito', icon: Icons.ShoppingCart, node: 'bg-tech-yellow border-tech-card text-tech-carbon', badge: 'bg-tech-yellow/15 text-tech-yellow border-tech-yellow/40' },
+  checkout_start: { label: 'Empezó a pagar', icon: Icons.CreditCard, node: 'bg-orange-500 border-tech-card text-white', badge: 'bg-orange-500/15 text-orange-300 border-orange-500/40' },
+  checkout_payment: { label: 'Paso de pago', icon: Icons.CreditCard, node: 'bg-orange-500 border-tech-card text-white', badge: 'bg-orange-500/15 text-orange-300 border-orange-500/40' },
+  purchase: { label: 'Compra realizada', icon: Icons.BadgeCheck, node: 'bg-emerald-500 border-tech-card text-white', badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  chat_open: { label: 'Abrió el chat', icon: Icons.MessageCircle, node: 'bg-sky-500 border-tech-card text-white', badge: 'bg-sky-500/15 text-sky-300 border-sky-500/40' },
+  chat_proposal_open: { label: 'Abrió la propuesta del chat', icon: Icons.MessageCircle, node: 'bg-sky-500 border-tech-card text-white', badge: 'bg-sky-500/15 text-sky-300 border-sky-500/40' },
+  sign_up: { label: 'Creó una cuenta', icon: Icons.UserPlus, node: 'bg-cyan-500 border-tech-card text-white', badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40' },
+  search: { label: 'Buscó', icon: Icons.Search, node: 'bg-fuchsia-500 border-tech-card text-white', badge: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/40' },
+  search_no_results: { label: 'Búsqueda sin resultados', icon: Icons.SearchX, node: 'bg-red-500 border-tech-card text-white', badge: 'bg-red-500/15 text-red-300 border-red-500/40' },
+};
 
 export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
   sessionId,
   adminToken,
   onClose,
+  banner,
 }) => {
   const [data, setData] = useState<SessionDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,7 +132,7 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
     if (sec < 60) return `${sec}s`;
     const mins = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${mins}m ${s > 0 ? `${s}s` : ''}`;
+    return s > 0 ? `${mins}m ${s}s` : `${mins}m`;
   };
 
   return (
@@ -166,6 +186,24 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
 
           {!loading && data && (
             <>
+              {banner}
+
+              {/* Resumen: si es un visitante que interesa y lo importante que ha hecho */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-tech-carbon/50 px-4 py-3 rounded-md border border-tech-border">
+                <TierBadge tier={data.summary.tier} />
+                <span className="text-xs font-mono text-tech-text">
+                  <strong>{data.summary.signals.pageviews}</strong> {data.summary.signals.pageviews === 1 ? 'página' : 'páginas'}
+                </span>
+                <SignalChips
+                  signals={data.summary.signals}
+                  cartValue={data.summary.cartValue}
+                  interests={{
+                    searches: data.events.filter((e) => e.eventName === 'search' || e.eventName === 'search_no_results').map((e) => e.eventData.find((d) => d.key === 'query')?.value || '').filter(Boolean).slice(-2),
+                    bikes: data.events.filter((e) => e.eventName === 'bike_selected').map((e) => e.eventData.find((d) => d.key === 'bike')?.value || '').filter(Boolean).slice(-1),
+                  }}
+                />
+              </div>
+
               {/* Tarjetas de Datos de la Sesión */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-tech-carbon/50 p-4 rounded-md border border-tech-border text-xs font-mono">
                 {/* Ubicación */}
@@ -251,20 +289,26 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
                     const isPageview = ev.eventType === 1;
                     const isBikeSelected = ev.eventName === 'bike_selected';
                     const isLast = idx === data.events.length - 1;
+                    const meta = EVENT_META[ev.eventName];
+                    const MetaIcon = meta?.icon;
 
                     return (
                       <div key={ev.eventId || idx} className="relative group">
                         {/* Nodo / Punto del timeline */}
                         <div
                           className={`absolute -left-6 sm:-left-8 top-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border-2 shadow-md ${
-                            isLast
+                            meta
+                              ? meta.node
+                              : isLast
                               ? 'bg-emerald-500 border-tech-card text-tech-carbon'
                               : isBikeSelected
                               ? 'bg-tech-yellow border-tech-card text-tech-carbon'
                               : 'bg-tech-card border-tech-border text-tech-muted group-hover:border-tech-yellow group-hover:text-tech-yellow'
                           }`}
                         >
-                          {isBikeSelected ? (
+                          {MetaIcon ? (
+                            <MetaIcon size={12} />
+                          ) : isBikeSelected ? (
                             <Icons.Sparkles size={12} />
                           ) : isPageview ? (
                             <span className="text-[10px] font-mono font-bold">{idx + 1}</span>
@@ -277,7 +321,9 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
                         <div className="bg-tech-carbon/80 border border-tech-border rounded-md p-3.5 space-y-2 hover:border-tech-border/80 transition-colors">
                           <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono">
                             <div className="flex items-center gap-2">
-                              <span className="text-tech-yellow font-bold">{ev.timeFormatted}</span>
+                              <span className="text-tech-yellow font-bold">
+                                {new Set(data.events.map((e) => e.dateFormatted)).size > 1 ? `${ev.dateFormatted} ` : ''}{ev.timeFormatted}
+                              </span>
                               <span className="text-tech-muted">
                                 ({ev.secondsFromStart === 0 ? 'Entrada' : `+${formatSeconds(ev.secondsFromStart)}`})
                               </span>
@@ -295,6 +341,15 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
                               </span>
                             )}
                           </div>
+
+                          {/* Evento importante (carrito, pago, chat…) */}
+                          {meta && (
+                            <div>
+                              <span className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded border ${meta.badge}`}>
+                                {MetaIcon && <MetaIcon size={12} />} {meta.label}
+                              </span>
+                            </div>
+                          )}
 
                           {/* Si es selección de moto */}
                           {isBikeSelected && (
@@ -337,7 +392,7 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
                                   key={dIdx}
                                   className="text-[10px] font-mono bg-tech-card px-2 py-0.5 rounded border border-tech-border text-tech-muted"
                                 >
-                                  <strong>{d.key}:</strong> {d.value}
+                                  <strong>{d.key}:</strong> {/^-?\d+\.\d+$/.test(d.value) ? String(parseFloat(d.value)) : d.value}
                                 </span>
                               ))}
                             </div>
