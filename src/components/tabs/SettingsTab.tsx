@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import * as Icons from 'lucide-react';
 import { NotificationSettings } from '../NotificationPanels';
+import { ReportsSettings } from './ReportsSettings';
 import { SystemSettings } from './SystemSettings';
 
-type Section = 'notifications' | 'system';
+type Section = 'notifications' | 'reports' | 'system';
 
 const SECTION_KEY = 'settings_section';
 
 /** Ajustes del panel: avisos (qué recibir y en qué dispositivos) y sistema (estado del servidor). */
 export const SettingsTab: React.FC<{ adminToken: string; onNotificationsChange: () => void }> = ({ adminToken, onNotificationsChange }) => {
   const [section, setSection] = useState<Section>(() => {
-    try { return localStorage.getItem(SECTION_KEY) === 'system' ? 'system' : 'notifications'; } catch { return 'notifications'; }
+    try { const v = localStorage.getItem(SECTION_KEY); return v === 'system' || v === 'reports' ? v : 'notifications'; } catch { return 'notifications'; }
   });
   const choose = (s: Section) => {
     setSection(s);
@@ -19,6 +20,7 @@ export const SettingsTab: React.FC<{ adminToken: string; onNotificationsChange: 
 
   const tabs: { id: Section; label: string; icon: React.ElementType }[] = [
     { id: 'notifications', label: 'Avisos', icon: Icons.Bell },
+    { id: 'reports', label: 'Informes', icon: Icons.Mail },
     { id: 'system', label: 'Sistema', icon: Icons.Server },
   ];
 
@@ -42,7 +44,9 @@ export const SettingsTab: React.FC<{ adminToken: string; onNotificationsChange: 
           );
         })}
       </div>
-      {section === 'notifications' ? <NotificationSettings token={adminToken} onChange={onNotificationsChange} /> : <SystemSettings adminToken={adminToken} />}
+      {section === 'notifications' && <NotificationSettings token={adminToken} onChange={onNotificationsChange} />}
+      {section === 'reports' && <ReportsSettings adminToken={adminToken} />}
+      {section === 'system' && <SystemSettings adminToken={adminToken} />}
     </div>
   );
 };

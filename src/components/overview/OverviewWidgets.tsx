@@ -1,7 +1,7 @@
 import React from 'react';
 import * as Icons from 'lucide-react';
 import { deltaOf, fmtValue, type Delta } from '../../utils/overviewFormat';
-import type { OverviewKpi, OverviewPreset } from '../../types/overview';
+import type { OverviewCompare, OverviewKpi, OverviewPreset } from '../../types/overview';
 
 const SENTIMENT_CLS: Record<Delta['sentiment'], string> = {
   good: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
@@ -10,7 +10,8 @@ const SENTIMENT_CLS: Record<Delta['sentiment'], string> = {
 };
 
 /** Variación respecto al periodo anterior: flecha, texto y color según sea bueno o malo para el negocio. */
-export const DeltaChip: React.FC<{ kpi: Pick<OverviewKpi, 'value' | 'prev' | 'unit' | 'good'> }> = ({ kpi }) => {
+export const DeltaChip: React.FC<{ kpi: Pick<OverviewKpi, 'value' | 'prev' | 'unit' | 'good' | 'noPrev'> }> = ({ kpi }) => {
+  if (kpi.noPrev) return <span title="El periodo de comparación es anterior a los primeros datos que hay" className="text-[9px] font-mono text-tech-muted uppercase tracking-wider">Sin datos de comparación</span>;
   const d = deltaOf(kpi);
   if (d.dir === 'none') return <span className="text-[9px] font-mono text-tech-muted uppercase tracking-wider">Foto del momento</span>;
   const Icon = d.dir === 'up' || d.dir === 'new' ? Icons.ArrowUpRight : d.dir === 'down' ? Icons.ArrowDownRight : Icons.Minus;
@@ -160,5 +161,32 @@ export const PeriodPicker: React.FC<{
         </label>
       </div>
     )}
+  </div>
+);
+
+/* ───────────── Selector de con qué se compara ───────────── */
+
+export const COMPARE_OPTIONS: { id: OverviewCompare; label: string }[] = [
+  { id: 'prev', label: 'Periodo anterior' },
+  { id: 'yoy', label: 'Mismo periodo del año pasado' },
+];
+
+export const CompareToggle: React.FC<{ value: OverviewCompare; onChange: (c: OverviewCompare) => void }> = ({ value, onChange }) => (
+  <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-tech-muted">
+    <span>Comparar con</span>
+    <div role="group" aria-label="Con qué comparar" className="flex items-center gap-1 bg-tech-carbon p-1 rounded-md border border-tech-border max-w-full">
+      {COMPARE_OPTIONS.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          aria-pressed={value === o.id}
+          className={`px-3 py-1.5 rounded text-[11px] tracking-wider normal-case transition-all ${
+            value === o.id ? 'bg-tech-card text-tech-yellow border border-tech-border font-bold shadow-sm' : 'text-tech-muted hover:text-tech-text border border-transparent'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   </div>
 );

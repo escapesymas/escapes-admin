@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Icons from 'lucide-react';
 import { formatPrice } from '../../utils/format';
 import type { Order } from '../../types/admin';
-import type { OverviewAiReport, OverviewKpi, OverviewPreset, OverviewReport } from '../../types/overview';
+import type { OverviewAiReport, OverviewCompare, OverviewKpi, OverviewPreset, OverviewReport } from '../../types/overview';
 import { BarChart, FunnelChart } from '../overview/OverviewCharts';
-import { KpiTile, MarkdownLite, PeriodPicker, RankList } from '../overview/OverviewWidgets';
+import { CompareToggle, KpiTile, MarkdownLite, PeriodPicker, RankList } from '../overview/OverviewWidgets';
 import {
   DEVICE_NAMES, GROUP_ORDER, GROUP_TITLES, PAYMENT_NAMES, cityLabel, fmtDateTime, fmtDay, fmtDayLong, fmtEurShort, fmtValue,
 } from '../../utils/overviewFormat';
@@ -35,13 +35,16 @@ const shortDate = (date: string): string => {
 
 const rangeText = (from: string, to: string): string => (from === to ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`);
 
-const loadPeriod = (): { preset: OverviewPreset; from: string; to: string } => {
+const loadPeriod = (): { preset: OverviewPreset; from: string; to: string; compare: OverviewCompare } => {
   const today = madridToday();
-  const fallback = { preset: '30d' as OverviewPreset, from: addDays(today, -29), to: today };
+  const fallback = { preset: '30d' as OverviewPreset, from: addDays(today, -29), to: today, compare: 'prev' as OverviewCompare };
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (raw && VALID_PRESETS.includes(raw.preset)) {
-      return { preset: raw.preset, from: /^\d{4}-\d{2}-\d{2}$/.test(raw.from) ? raw.from : fallback.from, to: /^\d{4}-\d{2}-\d{2}$/.test(raw.to) ? raw.to : fallback.to };
+      return {
+        preset: raw.preset, compare: raw.compare === 'yoy' ? 'yoy' : 'prev',
+        from: /^\d{4}-\d{2}-\d{2}$/.test(raw.from) ? raw.from : fallback.from, to: /^\d{4}-\d{2}-\d{2}$/.test(raw.to) ? raw.to : fallback.to,
+      };
     }
   } catch { /* sin almacenamiento o datos rotos: se usa el periodo por defecto */ }
   return fallback;
@@ -72,6 +75,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
   const [preset, setPreset] = useState<OverviewPreset>(initial.preset);
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
+  const [compare, setCompare] = useState<OverviewCompare>(initial.compare);
   const [excludeInternal, setExcludeInternal] = useState(true);
 
   const [report, setReport] = useState<OverviewReport | null>(null);
@@ -94,10 +98,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
   // Un periodo personalizado solo se pide cuando las dos fechas están bien.
   const customOk = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to;
   const query = useMemo(() => {
-    const q = new URLSearchParams({ preset, excludeInternal: String(excludeInternal) });
+    const q = new URLSearchParams({ preset, compare, excludeInternal: String(excludeInternal) });
     if (preset === 'custom') { q.set('from', from); q.set('to', to); }
     return q.toString();
-  }, [preset, from, to, excludeInternal]);
+  }, [preset, from, to, compare, excludeInternal]);
   const queryRef = useRef(query);
   queryRef.current = query;
 
@@ -130,10 +134,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
   useEffect(() => { setAi(null); setAiError(null); setPdfError(null); }, [query]);
 
   useEffect(() => {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ preset, from, to })); } catch { /* no se recuerda */ }
-  }, [preset, from, to]);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ preset, from, to, compare })); } catch { /* no se recuerda */ }
+  }, [preset, from, to, compare]);
 
-  const body = useCallback((extra: Record<string, unknown> = {}) => JSON.stringify({ preset, excludeInternal, ...(preset === 'custom' ? { from, to } : {}), ...extra }), [preset, from, to, excludeInternal]);
+  const body = useCallback((extra: Record<string, unknown> = {}) => JSON.stringify({ preset, compare, excludeInternal, ...(preset === 'custom' ? { from, to } : {}), ...extra }), [preset, from, to, compare, excludeInternal]);
 
   const generateAi = async (force = false) => {
     const startedFor = queryRef.current;
@@ -215,6 +219,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
             onPreset={(p) => { setPreset(p); }}
             onDates={(f, t) => { setFrom(f); setTo(t); }}
           />
+          <CompareToggle value={compare} onChange={setCompare} />
           <label
             title="Oculta toda Canarias para no contar tus pruebas. Los clientes reales de Canarias tampoco salen mientras esté marcado."
             className="inline-flex items-center gap-2 cursor-pointer select-none text-xs font-mono text-tech-muted hover:text-tech-text bg-tech-carbon/60 px-3 py-1.5 rounded-sm border border-tech-border"
@@ -257,6 +262,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-md p-4 text-xs font-mono text-red-400 flex items-center gap-3">
           <Icons.AlertCircle className="w-5 h-5 flex-shrink-0" /> <span>{error}</span>
+        </div>
+      )}
+      {report && report.kpis.some((k) => k.noPrev) && (
+        <div className="bg-sky-500/10 border border-sky-500/30 rounded-md p-3 text-xs font-mono text-sky-200 flex items-start gap-2">
+          <Icons.Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            No hay datos de «{report.period.prevLabel.toLowerCase()}» ({rangeText(report.period.prevFrom, report.period.prevTo)}) con los que comparar:
+            {report.dataSince.store ? ` la tienda tiene datos desde el ${shortDate(report.dataSince.store)}` : ''}
+            {report.dataSince.visits ? ` y las estadísticas web desde el ${shortDate(report.dataSince.visits)}` : ''}.
+            Esos indicadores salen sin comparar (no es lo mismo que «cero»).
+          </span>
         </div>
       )}
       {report?.warnings.map((w) => (
@@ -331,6 +347,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
                 colorClass="fill-tech-yellow"
                 format={fmtEurShort}
                 data={report.sales.byDay.map((d) => ({ label: fmtDay(d.date), title: `${fmtDayLong(d.date)} · ${d.orders} ${d.orders === 1 ? 'pedido' : 'pedidos'}`, value: d.revenue }))}
+                compare={report.compareSeries?.revenue}
+                compareLabel={report.period.prevLabel}
               />
             </Card>
             <Card
@@ -344,6 +362,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
                   colorClass="fill-sky-400"
                   format={(v) => fmtValue(v, 'int')}
                   data={report.visits.byDay.map((d) => ({ label: fmtDay(d.date), title: `${fmtDayLong(d.date)} · ${fmtValue(d.pageviews, 'int')} páginas vistas`, value: d.visitors }))}
+                  compare={report.compareSeries?.visitors}
+                  compareLabel={report.period.prevLabel}
                 />
               ) : <p className="text-[11px] text-tech-muted font-mono py-6">Las estadísticas de visitas no están disponibles ahora.</p>}
             </Card>
@@ -363,6 +383,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
                   colorClass="fill-orange-400"
                   format={(v) => fmtValue(v, 'int')}
                   data={report.visits.byDay.map((d) => ({ label: fmtDay(d.date), title: `${fmtDayLong(d.date)} · ${fmtValue(d.cartValue, 'eur')} añadidos · ${d.checkouts} ${d.checkouts === 1 ? 'empieza' : 'empiezan'} a pagar`, value: d.carts }))}
+                  compare={report.compareSeries?.carts}
+                  compareLabel={report.period.prevLabel}
                 />
               </Card>
             </div>

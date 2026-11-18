@@ -660,7 +660,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogou
               {activeTab === 'sync' && 'Monitorea e inicia la sincronización de catálogos e imágenes del distribuidor.'}
               {activeTab === 'margins' && 'Configura márgenes por marca, categoría o globales y ejecuta el recálculo masivo de precios.'}
               {activeTab === 'notifications' && 'Historial de los avisos del panel.'}
-              {activeTab === 'settings' && 'Avisos del panel (qué recibir y en qué dispositivos) y estado del servidor.'}
+              {activeTab === 'settings' && 'Avisos del panel, informes por correo y estado del servidor.'}
               {activeTab === 'chat' && (isAdvisor ? 'Clientes que el asistente IA te ha pasado. Responde aquí.' : 'Clientes que el asistente IA te ha pasado. Responde aquí y ajusta tu horario de atención.')}
               {activeTab === 'advisors' && 'Rendimiento de cada asesor, su % de comisión, lo que hay que pagarle y avisos al equipo.'}
               {activeTab === 'accounting' && 'Analíticas financieras, libro de ventas, IVA repercutido y descarga de facturas PDF.'}

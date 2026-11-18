@@ -17,12 +17,16 @@ export const BarChart: React.FC<{
   colorClass: string;
   ariaLabel: string;
   height?: number;
-}> = ({ data, format, colorClass, ariaLabel, height = 130 }) => {
+  /** Serie del periodo de comparación (una por barra; null = sin dato): se dibuja como una línea discontinua. */
+  compare?: (number | null)[] | null;
+  compareLabel?: string;
+}> = ({ data, format, colorClass, ariaLabel, height = 130, compare, compareLabel }) => {
   const [hover, setHover] = useState<number | null>(null);
   if (data.length < 2) {
     return <div className="flex items-center justify-center text-[11px] text-tech-muted font-mono" style={{ height }}>Un solo día: no hay serie por día.</div>;
   }
-  const max = Math.max(...data.map((d) => d.value), 0);
+  const cmp = compare && compare.length === data.length && compare.some((v) => v != null) ? compare : null;
+  const max = Math.max(...data.map((d) => d.value), ...(cmp || []).map((v) => v ?? 0), 0);
   const slots = Math.max(data.length, MIN_SLOTS);
   const offset = (slots - data.length) / 2;
   const W = slots * 10;
@@ -35,6 +39,19 @@ export const BarChart: React.FC<{
           {[0, 50, 100].map((y) => (
             <line key={y} x1={0} x2={W} y1={y} y2={y} stroke="currentColor" className="text-tech-border" strokeWidth={1} strokeDasharray={y === 100 ? undefined : '3 4'} vectorEffect="non-scaling-stroke" />
           ))}
+          {cmp && (() => {
+            // Una línea por tramos: los días sin dato la cortan.
+            const segs: string[] = [];
+            let cur = '';
+            cmp.forEach((v, i) => {
+              if (v == null) { if (cur) segs.push(cur); cur = ''; return; }
+              const x = (offset + i) * 10 + 5;
+              const y = 100 - (max > 0 ? (v / max) * 96 : 0);
+              cur += `${cur ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+            });
+            if (cur) segs.push(cur);
+            return segs.map((d, i) => <path key={i} d={d} fill="none" stroke="currentColor" className="text-slate-300" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />);
+          })()}
           {data.map((d, i) => {
             const h = max > 0 ? Math.max(d.value > 0 ? 1.5 : 0, (d.value / max) * 96) : 0;
             const x = (offset + i) * 10;
@@ -55,9 +72,16 @@ export const BarChart: React.FC<{
           >
             <div className="text-[9px] text-tech-muted font-mono capitalize">{data[hover].title || data[hover].label}</div>
             <div className="text-[11px] text-tech-text font-mono font-bold">{format(data[hover].value)}</div>
+            {cmp && cmp[hover] != null && <div className="text-[10px] text-slate-300 font-mono">{compareLabel ? `${compareLabel}: ` : 'Comparación: '}{format(cmp[hover] as number)}</div>}
           </div>
         )}
       </div>
+      {cmp && (
+        <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-300 mt-1.5">
+          <svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+          {compareLabel || 'Periodo de comparación'}
+        </div>
+      )}
       <div className="flex justify-between text-[9px] font-mono text-tech-muted mt-1">
         <span>{data[0].label}</span>
         {data.length > 2 && <span>{mid}</span>}
@@ -75,7 +99,7 @@ export const FunnelChart: React.FC<{ steps: OverviewFunnelStep[] }> = ({ steps }
       {steps.map((s, i) => {
         const prevStep = i > 0 ? steps[i - 1].current : 0;
         const conv = i > 0 && prevStep > 0 ? (s.current / prevStep) * 100 : null;
-        const d = deltaOf({ value: s.current, prev: s.previous, unit: 'int', good: 'up' });
+        const d = s.previous == null ? null : deltaOf({ value: s.current, prev: s.previous, unit: 'int', good: 'up' });
         return (
           <div key={s.key}>
             <div className="flex items-baseline justify-between gap-2 text-[11px] font-mono mb-1">
@@ -89,7 +113,7 @@ export const FunnelChart: React.FC<{ steps: OverviewFunnelStep[] }> = ({ steps }
               <div className="h-full bg-tech-yellow/80" style={{ width: `${Math.max(1.5, (s.current / max) * 100)}%` }} />
             </div>
             <div className="text-[9px] font-mono text-tech-muted mt-0.5">
-              Periodo anterior: {fmtValue(s.previous, 'int')}{d.text && d.dir !== 'flat' ? ` (${d.text})` : ''}
+              {s.previous == null ? 'Comparación: sin datos' : `Comparación: ${fmtValue(s.previous, 'int')}${d && d.text && d.dir !== 'flat' ? ` (${d.text})` : ''}`}
             </div>
           </div>
         );

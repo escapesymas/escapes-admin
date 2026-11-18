@@ -1,11 +1,14 @@
 /** Informe de la Vista general: misma forma que `OverviewReport` de escapes-backend/lib/overview-report.ts. */
 
 export type OverviewPreset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'prev_month' | 'year' | 'custom';
+/** Con qué se compara: el periodo anterior equivalente o las mismas fechas del año pasado. */
+export type OverviewCompare = 'prev' | 'yoy';
 export type KpiUnit = 'eur' | 'int' | 'pct' | 'dec';
 export type KpiGroup = 'ventas' | 'visitas' | 'carritos' | 'clientes' | 'atencion' | 'catalogo';
 
 export interface OverviewPeriod {
   preset: OverviewPreset;
+  compare: OverviewCompare;
   label: string;
   from: string;
   to: string;
@@ -20,14 +23,16 @@ export interface OverviewKpi {
   group: KpiGroup;
   label: string;
   value: number;
-  /** null = foto del momento (no se compara). */
+  /** null = foto del momento (no se compara) o sin datos de ese periodo (`noPrev`). */
   prev: number | null;
   unit: KpiUnit;
   good: 'up' | 'down' | null;
   hint?: string;
+  /** El periodo de comparación es anterior a los primeros datos: no se compara (no es lo mismo que cero). */
+  noPrev?: boolean;
 }
 
-export interface OverviewFunnelStep { key: string; label: string; current: number; previous: number }
+export interface OverviewFunnelStep { key: string; label: string; current: number; previous: number | null }
 
 export interface OverviewVisits {
   byDay: { date: string; visitors: number; pageviews: number; carts: number; checkouts: number; cartValue: number }[];
@@ -53,6 +58,10 @@ export interface OverviewReport {
     coupons: { code: string; orders: number; discount: number }[];
   };
   visits: OverviewVisits | null;
+  /** Series por día del periodo de comparación, alineadas por posición con las del periodo (null = sin dato). */
+  compareSeries: { revenue: (number | null)[]; visitors: (number | null)[]; carts: (number | null)[] } | null;
+  /** Primer día con datos de la tienda y de las estadísticas web. */
+  dataSince: { store: string | null; visits: string | null };
   funnel: OverviewFunnelStep[];
   carts: {
     active: { count: number; value: number; guests: number; stale: number };
@@ -69,4 +78,30 @@ export interface OverviewAiReport {
   attempts: number;
   notes: string[];
   period: OverviewPeriod;
+}
+
+/* ───────────── Informes programados por correo ───────────── */
+
+export type ReportKind = 'daily' | 'weekly' | 'monthly';
+
+export interface ReportSchedule { enabled: boolean; compare: OverviewCompare }
+
+export interface OverviewEmailConfig {
+  recipients: string[];
+  includeAi: boolean;
+  daily: ReportSchedule;
+  weekly: ReportSchedule;
+  monthly: ReportSchedule;
+}
+
+export interface OverviewEmailLogEntry { kind: ReportKind; at: string; ok: boolean; test: boolean; subject: string; to: string; ai: boolean; error?: string }
+
+export interface OverviewEmailState {
+  config: OverviewEmailConfig;
+  log: OverviewEmailLogEntry[];
+  sendHour: number;
+  maxRecipients: number;
+  /** Próximo día de envío (YYYY-MM-DD) de cada informe. */
+  next: Record<ReportKind, string>;
+  adminEmail?: string | null;
 }
