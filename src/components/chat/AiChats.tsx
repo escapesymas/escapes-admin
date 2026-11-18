@@ -71,7 +71,7 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
             <button key={r.id} onClick={() => open(r.id)}
               className={`w-full text-left p-3 hover:bg-tech-border/20 ${selected?.id === r.id ? 'bg-tech-border/30' : ''}`}>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-tech-text truncate">{r.customer_name || r.customer_email || `Cliente ${r.user_id}`}</span>
+                <span className="text-xs font-bold text-tech-text truncate">{r.customer_name || r.customer_email || (r.user_id ? `Cliente ${r.user_id}` : 'Visitante sin sesión')}</span>
                 <span className="text-[10px] text-tech-muted shrink-0">{fmt(r.updated_at)}</span>
               </div>
               <p className="text-[11px] text-tech-muted truncate mt-0.5">{r.first_question || '—'}</p>
@@ -94,8 +94,8 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
           <>
             <div className="px-4 py-3 border-b border-tech-border flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-tech-text truncate">{selected.customer_name || selected.customer_email || `Cliente ${selected.user_id}`}</p>
-                <p className="text-[10px] text-tech-muted">{selected.customer_email} · empezó {fmt(selected.created_at)}</p>
+                <p className="text-sm font-bold text-tech-text truncate">{selected.customer_name || selected.customer_email || (selected.user_id ? `Cliente ${selected.user_id}` : 'Visitante sin sesión')}</p>
+                <p className="text-[10px] text-tech-muted">{selected.customer_email ? `${selected.customer_email} · ` : ''}empezó {fmt(selected.created_at)}</p>
               </div>
               {selected.handoff_conversation_id && (
                 <button onClick={() => onOpenConversation(selected.handoff_conversation_id!)}
