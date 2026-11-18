@@ -44,6 +44,26 @@ function useNewVersion(): boolean {
   return available;
 }
 
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  badge?: string | number;
+  /** Algo que atender (pedidos por gestionar, mensajes sin leer…): suma en la cabecera del grupo si está plegado. */
+  alert?: boolean;
+  /** El número es de gente conectada ahora (se enseña con un punto verde en vez de como pendiente). */
+  live?: boolean;
+}
+
+/** Grupos del menú que el usuario ha plegado (se recuerdan entre visitas). */
+const NAV_KEY = 'escapes-admin-nav-collapsed';
+const loadCollapsed = (): string[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAV_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+};
+
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   children,
   activeTab,
@@ -61,6 +81,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const newVersion = useNewVersion();
+  const [collapsed, setCollapsed] = useState<string[]>(loadCollapsed);
   
   const adminEmail = session?.user_email || 'admin@escapesymas.com';
 
@@ -78,60 +99,138 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     setIsMobileMenuOpen(false);
   };
 
-  const allNavItems = [
-    { id: 'stats', label: 'Vista General', icon: Icons.LayoutDashboard },
+  // Menú agrupado como el de conta26: un acceso suelto arriba y grupos plegables por temas.
+  const dashboardItem: NavItem = { id: 'stats', label: 'Vista general', icon: Icons.LayoutDashboard };
+  const navGroups: { id: string; label: string; items: NavItem[] }[] = [
     {
-      id: 'analytics',
-      label: 'Estadísticas Web',
-      icon: Icons.Activity,
-      badge: onlineUsersCount > 0 ? `${onlineUsersCount} online` : undefined,
+      id: 'ventas', label: 'Ventas', items: [
+        { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount, alert: true },
+        { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
+        { id: 'coupons', label: 'Cupones', icon: Icons.Ticket },
+        { id: 'shipping', label: 'Envíos y tarifas', icon: Icons.Truck },
+      ],
     },
-    { id: 'orders', label: 'Pedidos', icon: Icons.ShoppingCart, badge: pendingOrdersCount },
+    {
+      id: 'clientes', label: 'Clientes', items: [
+        { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount, alert: true },
+        { id: 'advisors', label: 'Asesores', icon: Icons.HandCoins },
+        { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount, alert: true },
+        { id: 'users', label: 'Usuarios', icon: Icons.Users },
+      ],
+    },
+    {
+      id: 'catalogo', label: 'Catálogo', items: [
+        { id: 'products', label: 'Productos', icon: Icons.Package },
+        { id: 'margins', label: 'Precios y márgenes', icon: Icons.TrendingUp },
+        { id: 'sync', label: 'Sincronización', icon: Icons.RefreshCw },
+      ],
+    },
+    {
+      id: 'marketing', label: 'Marketing', items: [
+        { id: 'analytics', label: 'Estadísticas web', icon: Icons.Activity, badge: onlineUsersCount > 0 ? onlineUsersCount : undefined, live: true },
+        { id: 'seo', label: 'SEO', icon: Icons.Link2 },
+        { id: 'social-content', label: 'Contenido TikTok', icon: Icons.Clapperboard },
+      ],
+    },
+    {
+      id: 'administracion', label: 'Administración', items: [
+        { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
+        { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount, alert: true },
+        { id: 'settings', label: 'Ajustes', icon: Icons.Settings },
+        { id: 'account-security', label: 'Seguridad', icon: Icons.ShieldCheck },
+      ],
+    },
+  ];
+  // Los asesores solo tienen el chat y su seguridad: una lista corta, sin grupos.
+  const advisorItems: NavItem[] = [
     { id: 'chat', label: 'Chat', icon: Icons.MessagesSquare, badge: chatPendingCount },
-    { id: 'advisors', label: 'Asesores', icon: Icons.HandCoins },
-    { id: 'carts', label: 'Carritos', icon: Icons.ShoppingBag, badge: activeCartsCount },
-    { id: 'products', label: 'Productos', icon: Icons.Package },
-    { id: 'reviews', label: 'Reseñas', icon: Icons.Star, badge: pendingReviewsCount },
-    { id: 'users', label: 'Usuarios', icon: Icons.Users },
-    { id: 'coupons', label: 'Cupones', icon: Icons.Ticket },
-    { id: 'shipping', label: 'Envíos y Tarifas', icon: Icons.Truck },
-    { id: 'seo', label: 'SEO Manager', icon: Icons.Link2 },
-    { id: 'sync', label: 'Sincronización', icon: Icons.RefreshCw },
-    { id: 'margins', label: 'Precios y Márgenes', icon: Icons.TrendingUp },
-    { id: 'social-content', label: 'Contenido TikTok', icon: Icons.Clapperboard },
-    { id: 'notifications', label: 'Avisos', icon: Icons.Bell, badge: unreadNotificationsCount },
-    { id: 'accounting', label: 'Contabilidad', icon: Icons.Receipt },
-    { id: 'settings', label: 'Ajustes', icon: Icons.Settings },
     { id: 'account-security', label: 'Seguridad', icon: Icons.ShieldCheck },
   ];
-  const navItems = isAdvisor ? allNavItems.filter((i) => i.id === 'chat' || i.id === 'account-security') : allNavItems;
 
-  const renderNavButtons = () => {
-    return navItems.map(item => {
-      const Icon = item.icon;
-      const isActive = activeTab === item.id;
-      return (
-        <button
-          key={item.id}
-          onClick={() => handleTabClick(item.id)}
-          className={`w-full flex items-center gap-3 text-left px-4 py-3.5 rounded-md text-xs font-mono uppercase tracking-wider transition-all border ${
-            isActive 
-              ? 'bg-tech-card border-tech-border text-tech-yellow shadow-inner' 
-              : 'border-transparent text-tech-muted hover:text-tech-text hover:bg-[#1a1b1e]/40'
-          }`}
-        >
-          <Icon size={16} /> 
-          <span className="mt-0.5">{item.label}</span>
-          {item.badge ? (
-            <span className={`ml-auto text-[9px] font-bold px-2 py-0.5 rounded-sm not-italic ${
+  const toggleGroup = (id: string) => {
+    const next = collapsed.includes(id) ? collapsed.filter((g) => g !== id) : [...collapsed, id];
+    setCollapsed(next);
+    try { localStorage.setItem(NAV_KEY, JSON.stringify(next)); } catch { /* sin almacenamiento: no se recuerda */ }
+  };
+
+  // Al llegar a una pestaña de un grupo plegado (desde un aviso, un enlace o la última abierta) el grupo se despliega.
+  useEffect(() => {
+    const group = navGroups.find((g) => g.items.some((i) => i.id === activeTab));
+    if (group && collapsed.includes(group.id)) toggleGroup(group.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const renderItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = activeTab === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => handleTabClick(item.id)}
+        aria-current={isActive ? 'page' : undefined}
+        className={`w-full flex items-center gap-3 text-left px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${
+          isActive
+            ? 'bg-tech-yellow/10 text-tech-yellow'
+            : 'text-tech-muted hover:text-tech-text hover:bg-white/[0.04]'
+        }`}
+      >
+        <Icon size={16} strokeWidth={1.75} className="shrink-0" />
+        <span className="truncate">{item.label}</span>
+        {item.badge ? (
+          item.live ? (
+            <span
+              title={`${item.badge} online ahora`}
+              className="ml-auto shrink-0 flex items-center gap-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {item.badge}
+            </span>
+          ) : (
+            <span className={`ml-auto shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
               isActive ? 'bg-tech-yellow text-tech-carbon' : 'bg-tech-border text-tech-text'
             }`}>
               {item.badge}
             </span>
-          ) : null}
-        </button>
-      );
-    });
+          )
+        ) : null}
+      </button>
+    );
+  };
+
+  const renderNavButtons = () => {
+    if (isAdvisor) return <div className="space-y-0.5">{advisorItems.map(renderItem)}</div>;
+    return (
+      <>
+        <div className="space-y-0.5">{renderItem(dashboardItem)}</div>
+        {navGroups.map((group) => {
+          const open = !collapsed.includes(group.id);
+          const hasActive = group.items.some((i) => i.id === activeTab);
+          // Plegado, la cabecera enseña cuánto hay que atender dentro para que nada pendiente quede escondido.
+          const pending = group.items.reduce((sum, i) => sum + (i.alert && typeof i.badge === 'number' ? i.badge : 0), 0);
+          return (
+            <div key={group.id} className="pt-4">
+              <button
+                onClick={() => toggleGroup(group.id)}
+                aria-expanded={open}
+                aria-controls={`nav-group-${group.id}`}
+                className={`w-full flex items-center justify-between px-3 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.14em] transition-colors ${
+                  !open && hasActive ? 'text-tech-yellow' : 'text-tech-muted hover:text-tech-text'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  {group.label}
+                  {!open && pending > 0 && (
+                    <span className="text-[9px] font-bold px-1.5 py-px rounded-full bg-tech-yellow text-tech-carbon tracking-normal">{pending}</span>
+                  )}
+                </span>
+                <Icons.ChevronDown size={13} className={`opacity-60 transition-transform ${open ? '' : '-rotate-90'}`} />
+              </button>
+              {open && <div id={`nav-group-${group.id}`} className="space-y-0.5">{group.items.map(renderItem)}</div>}
+            </div>
+          );
+        })}
+      </>
+    );
   };
 
   return (
@@ -196,7 +295,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </button>
           </div>
 
-          <nav className="p-4 space-y-1.5 flex-1 overflow-y-auto custom-scrollbar">
+          <nav aria-label="Secciones del panel" className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
             {renderNavButtons()}
           </nav>
 
@@ -236,7 +335,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </div>
           </div>
 
-          <nav className="p-4 space-y-1.5 flex-1 overflow-y-auto custom-scrollbar">
+          <nav aria-label="Secciones del panel" className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
             {renderNavButtons()}
           </nav>
 
