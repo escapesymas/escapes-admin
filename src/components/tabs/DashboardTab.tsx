@@ -332,7 +332,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
         <div className={`space-y-6 transition-opacity ${stale ? 'opacity-60' : ''}`} aria-busy={stale}>
           {/* ── Indicadores clave ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            {headline.map((k) => <KpiTile key={k.id} kpi={k} big />)}
+            {headline.map((k, i) => <KpiTile key={k.id} kpi={k} big index={i} />)}
           </div>
 
           {/* ── Gráficas por día ── */}
@@ -343,6 +343,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
               right={<span className="text-[11px] font-mono text-tech-yellow font-bold">{fmtValue(report.sales.byDay.reduce((s, d) => s + d.revenue, 0), 'eur')}</span>}
             >
               <BarChart
+                key={`v-${report.period.from}-${report.period.to}-${report.period.compare}`}
                 ariaLabel="Ventas por día en euros"
                 colorClass="fill-tech-yellow"
                 format={fmtEurShort}
@@ -358,6 +359,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
             >
               {report.visits ? (
                 <BarChart
+                  key={`u-${report.period.from}-${report.period.to}-${report.period.compare}`}
                   ariaLabel="Visitantes por día"
                   colorClass="fill-sky-400"
                   format={(v) => fmtValue(v, 'int')}
@@ -379,6 +381,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
                 right={<span className="text-[11px] font-mono text-tech-yellow font-bold">{fmtValue(kpisById.get('carts_added_value')?.value ?? 0, 'eur')} añadidos</span>}
               >
                 <BarChart
+                  key={`c-${report.period.from}-${report.period.to}-${report.period.compare}`}
                   ariaLabel="Visitantes que añaden al carrito por día"
                   colorClass="fill-orange-400"
                   format={(v) => fmtValue(v, 'int')}
@@ -406,7 +409,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ adminToken, orders, 
                   </button>
                   {open && (
                     <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {ks.map((k) => <KpiTile key={k.id} kpi={k} />)}
+                      {ks.map((k, i) => <KpiTile key={k.id} kpi={k} index={i} />)}
                     </div>
                   )}
                 </section>

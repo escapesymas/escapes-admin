@@ -48,3 +48,29 @@
   background: #facc15;
 }
 
+
+/* ═══════════════════ Movimiento del panel ═══════════════════
+   Solo `transform` y `opacity`; todo se apaga con prefers-reduced-motion. `animate-fade-in` lo usaban ~20 pantallas pero no
+   estaba definido (no hacía nada): al definirlo, cada pestaña entra con un fundido corto.
+   `--i` (índice) escalona la entrada de tarjetas, barras y listas. Las animaciones solo se reproducen al montar un elemento:
+   las actualizaciones en directo (cada pocos segundos) no las repiten. */
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes motion-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes motion-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes motion-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes motion-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes motion-line { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-fade-in { animation: motion-fade 320ms var(--ease-out) both; }
+  .motion-rise { animation: motion-rise 420ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 12) * 45ms); }
+  /* Barras de las gráficas: crecen desde la base (SVG). */
+  .motion-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: motion-grow 650ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 40) * 14ms); }
+  /* Barras horizontales (embudo, listados): crecen desde la izquierda. */
+  .motion-grow-x { transform-origin: 0 50%; animation: motion-grow-x 700ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 10) * 80ms); }
+  /* Línea de comparación de las gráficas: aparece cuando las barras ya han crecido. */
+  .motion-line { animation: motion-line 400ms ease-out 700ms both; }
+}

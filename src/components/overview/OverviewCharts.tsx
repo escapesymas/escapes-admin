@@ -50,7 +50,7 @@ export const BarChart: React.FC<{
               cur += `${cur ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
             });
             if (cur) segs.push(cur);
-            return segs.map((d, i) => <path key={i} d={d} fill="none" stroke="currentColor" className="text-slate-300" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />);
+             return segs.map((d, i) => <path key={i} d={d} fill="none" stroke="currentColor" className="text-slate-300 motion-line" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />);
           })()}
           {data.map((d, i) => {
             const h = max > 0 ? Math.max(d.value > 0 ? 1.5 : 0, (d.value / max) * 96) : 0;
@@ -58,7 +58,7 @@ export const BarChart: React.FC<{
             return (
               <g key={i}>
                 {hover === i && <rect x={x} y={0} width={10} height={100} className="fill-white/5" />}
-                <rect x={x + 1.5} y={100 - h} width={7} height={h} className={`${colorClass} ${hover === i ? 'opacity-100' : 'opacity-80'}`} />
+                <rect x={x + 1.5} y={100 - h} width={7} height={h} style={{ '--i': i } as React.CSSProperties} className={`${colorClass} motion-grow ${hover === i ? 'opacity-100' : 'opacity-80'}`} />
                 <rect x={x} y={0} width={10} height={100} fill="transparent" onMouseEnter={() => setHover(i)} onTouchStart={() => setHover(i)} />
               </g>
             );
@@ -110,7 +110,7 @@ export const FunnelChart: React.FC<{ steps: OverviewFunnelStep[] }> = ({ steps }
               </span>
             </div>
             <div className="h-2.5 bg-tech-carbon border border-tech-border/60 rounded-sm overflow-hidden">
-              <div className="h-full bg-tech-yellow/80" style={{ width: `${Math.max(1.5, (s.current / max) * 100)}%` }} />
+              <div className="h-full bg-tech-yellow/80 motion-grow-x" style={{ width: `${Math.max(1.5, (s.current / max) * 100)}%`, '--i': i } as React.CSSProperties} />
             </div>
             <div className="text-[9px] font-mono text-tech-muted mt-0.5">
               {s.previous == null ? 'Comparación: sin datos' : `Comparación: ${fmtValue(s.previous, 'int')}${d && d.text && d.dir !== 'flat' ? ` (${d.text})` : ''}`}

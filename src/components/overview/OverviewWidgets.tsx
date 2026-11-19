@@ -2,6 +2,7 @@ import React from 'react';
 import * as Icons from 'lucide-react';
 import { deltaOf, fmtValue, type Delta } from '../../utils/overviewFormat';
 import type { OverviewCompare, OverviewKpi, OverviewPreset } from '../../types/overview';
+import { AnimatedNumber } from './AnimatedNumber';
 
 const SENTIMENT_CLS: Record<Delta['sentiment'], string> = {
   good: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
@@ -23,13 +24,14 @@ export const DeltaChip: React.FC<{ kpi: Pick<OverviewKpi, 'value' | 'prev' | 'un
 };
 
 /** Indicador: nombre, cifra grande, variación y cifra del periodo anterior. */
-export const KpiTile: React.FC<{ kpi: OverviewKpi; big?: boolean }> = ({ kpi, big }) => (
+export const KpiTile: React.FC<{ kpi: OverviewKpi; big?: boolean; index?: number }> = ({ kpi, big, index = 0 }) => (
   <div
     title={kpi.hint}
-    className={`bg-tech-card border border-tech-border rounded-md ${big ? 'p-4' : 'p-3.5'} flex flex-col justify-between gap-2 hover:border-tech-yellow/40 transition-colors min-w-0`}
+    style={{ '--i': index } as React.CSSProperties}
+    className={`bg-tech-card border border-tech-border rounded-md ${big ? 'p-4' : 'p-3.5'} flex flex-col justify-between gap-2 hover:border-tech-yellow/40 transition-colors min-w-0 motion-rise`}
   >
     <div className="text-[10px] text-tech-muted font-mono uppercase tracking-widest leading-snug">{kpi.label}</div>
-    <div className={`${big ? 'text-2xl' : 'text-xl'} font-mono font-bold text-tech-text truncate`}>{fmtValue(kpi.value, kpi.unit)}</div>
+    <div className={`${big ? 'text-2xl' : 'text-xl'} font-mono font-bold text-tech-text truncate`}><AnimatedNumber value={kpi.value} format={(v) => fmtValue(v, kpi.unit)} /></div>
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-h-[20px]">
       <DeltaChip kpi={kpi} />
       {kpi.prev != null && <span className="text-[10px] font-mono text-tech-muted">antes {fmtValue(kpi.prev, kpi.unit)}</span>}
@@ -63,7 +65,7 @@ export const RankList: React.FC<{
                 <span className="text-tech-yellow font-bold shrink-0">{r.valueText ?? r.value}</span>
               </div>
               {r.sub && <div className="text-[9px] text-tech-muted truncate">{r.sub}</div>}
-              <div className="h-1 bg-tech-carbon rounded-sm mt-1 overflow-hidden"><div className="h-full bg-tech-yellow/50" style={{ width: `${Math.max(2, (r.value / max) * 100)}%` }} /></div>
+              <div className="h-1 bg-tech-carbon rounded-sm mt-1 overflow-hidden"><div className="h-full bg-tech-yellow/50 motion-grow-x" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, '--i': i } as React.CSSProperties} /></div>
             </li>
           ))}
         </ul>
@@ -85,7 +87,7 @@ export const MarkdownLite: React.FC<{ text: string }> = ({ text }) => {
     if (!list) return;
     const Tag = list.ordered ? 'ol' : 'ul';
     blocks.push(
-      <Tag key={`l${blocks.length}`} className={`${list.ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1.5 text-[12px] leading-relaxed text-tech-text/90 marker:text-tech-yellow`}>
+      <Tag key={`l${blocks.length}`} style={{ '--i': blocks.length } as React.CSSProperties} className={`${list.ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1.5 text-[12px] leading-relaxed text-tech-text/90 marker:text-tech-yellow motion-rise`}>
         {list.items.map((it, i) => <li key={i}>{inline(it)}</li>)}
       </Tag>,
     );
@@ -97,7 +99,7 @@ export const MarkdownLite: React.FC<{ text: string }> = ({ text }) => {
     const h = /^#{1,4}\s+(.*)$/.exec(line);
     if (h) {
       flush();
-      blocks.push(<h4 key={`h${blocks.length}`} className="text-[11px] font-mono font-bold uppercase tracking-widest text-tech-yellow pt-3 first:pt-0">{h[1].replace(/\*\*/g, '')}</h4>);
+      blocks.push(<h4 key={`h${blocks.length}`} style={{ '--i': blocks.length } as React.CSSProperties} className="text-[11px] font-mono font-bold uppercase tracking-widest text-tech-yellow pt-3 first:pt-0 motion-rise">{h[1].replace(/\*\*/g, '')}</h4>);
       continue;
     }
     const li = /^(?:[-*•]|(\d+)[.)])\s+(.*)$/.exec(line);
@@ -109,7 +111,7 @@ export const MarkdownLite: React.FC<{ text: string }> = ({ text }) => {
       continue;
     }
     flush();
-    blocks.push(<p key={`p${blocks.length}`} className="text-[12px] leading-relaxed text-tech-text/90">{inline(line)}</p>);
+    blocks.push(<p key={`p${blocks.length}`} style={{ '--i': blocks.length } as React.CSSProperties} className="text-[12px] leading-relaxed text-tech-text/90 motion-rise">{inline(line)}</p>);
   }
   flush();
   return <div className="space-y-2.5">{blocks}</div>;
