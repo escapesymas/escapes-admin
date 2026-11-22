@@ -78,7 +78,7 @@ export const SystemSettings: React.FC<{ adminToken: string }> = ({ adminToken })
       </h2>
 
       <div className="space-y-6">
-        <UsageBar label={`Uso de CPU (${vps.cores} Cores)`} percentText={`${vps.cpu}%`} percent={vps.cpu} />
+        <UsageBar label={`Uso de CPU (${vps.cores} núcleos, media del último minuto)`} percentText={`${vps.cpu}%`} percent={vps.cpu} />
         <UsageBar label={`Memoria RAM (${vps.ramUsed} / ${vps.ramTotal})`} percentText={`${vps.ramPercent}%`} percent={vps.ramPercent} />
         <UsageBar label={`Almacenamiento SSD (${vps.disk.used} / ${vps.disk.total})`} percentText={String(vps.disk.percent).endsWith('%') ? String(vps.disk.percent) : `${vps.disk.percent}%`} percent={diskPct} />
 
