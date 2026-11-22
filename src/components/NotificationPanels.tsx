@@ -36,6 +36,7 @@ const CATEGORY_STYLE: Record<string, { icon: React.ElementType; color: string }>
   visitor_activity: { icon: Flame, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
   visitor_leave: { icon: LogOut, color: 'text-rose-400 bg-rose-500/10 border-rose-500/30' },
   system: { icon: Server, color: 'text-slate-300 bg-slate-500/10 border-slate-500/30' },
+  email_sent: { icon: Send, color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30' },
   daily_summary: { icon: TrendingUp, color: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
 };
 const styleFor = (key: string) => CATEGORY_STYLE[key] || CATEGORY_STYLE.system;
