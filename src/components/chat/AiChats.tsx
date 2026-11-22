@@ -35,6 +35,8 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
   const [search, setSearch] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<(SessionRow & { messages: Turn[] }) | null>(null);
+  const [opening, setOpening] = useState<number | null>(null);
+  const [openError, setOpenError] = useState('');
 
   const headers = { Authorization: `Bearer ${adminToken}` };
 
@@ -52,24 +54,38 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
   useEffect(() => { setRows(null); load(); }, [load]);
 
   const open = async (id: number) => {
-    const res = await fetch(`/api/admin/ai-chats/${id}`, { headers });
-    if (res.ok) setSelected((await res.json()).session);
+    setOpening(id);
+    setOpenError('');
+    try {
+      const res = await fetch(`/api/admin/ai-chats/${id}`, { headers });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !d?.session) throw new Error(d?.error || `El servidor respondió ${res.status}`);
+      setSelected(d.session);
+    } catch (e: any) {
+      setOpenError(`No se pudo abrir la conversación: ${e?.message || 'error de conexión'}`);
+    } finally {
+      setOpening(null);
+    }
   };
+
+  // Los datos guardados pueden venir incompletos: la vista no debe romperse por ello.
+  const turns: Turn[] = Array.isArray(selected?.messages) ? selected!.messages.filter((m) => m && typeof m === 'object') : [];
 
   return (
     <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4">
-      <div className="bg-tech-card border border-tech-border rounded-xl overflow-hidden flex flex-col max-h-[75vh]">
+      <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col max-h-[75vh] ${selected ? 'hidden md:flex' : 'flex'}`}>
         <form onSubmit={(e) => { e.preventDefault(); setSearch(q.trim()); }} className="p-3 border-b border-tech-border flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente o texto…"
             className="flex-1 bg-tech-carbon border border-tech-border rounded-lg px-3 py-2 text-xs text-tech-text" />
           <button className="px-3 rounded-lg border border-tech-border text-tech-muted hover:text-tech-text"><Icons.Search size={14} /></button>
         </form>
         <div className="overflow-y-auto divide-y divide-tech-border">
+          {openError && <p className="p-3 text-xs text-red-400 bg-red-500/10">{openError}</p>}
           {rows === null && <p className="p-4 text-xs text-tech-muted">Cargando…</p>}
           {rows?.length === 0 && <p className="p-4 text-xs text-tech-muted">{search ? 'Sin resultados.' : 'Todavía no hay conversaciones con la IA guardadas.'}</p>}
           {rows?.map((r) => (
-            <button key={r.id} onClick={() => open(r.id)}
-              className={`w-full text-left p-3 hover:bg-tech-border/20 ${selected?.id === r.id ? 'bg-tech-border/30' : ''}`}>
+            <button key={r.id} onClick={() => open(r.id)} disabled={opening !== null}
+              className={`w-full text-left p-3 hover:bg-tech-border/20 ${selected?.id === r.id ? 'bg-tech-border/30' : ''} ${opening === r.id ? 'opacity-60' : ''}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-tech-text truncate">{r.customer_name || r.customer_email || (r.user_id ? `Cliente ${r.user_id}` : 'Visitante sin sesión')}</span>
                 <span className="text-[10px] text-tech-muted shrink-0">{fmt(r.updated_at)}</span>
@@ -87,13 +103,14 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
         </div>
       </div>
 
-      <div className="bg-tech-card border border-tech-border rounded-xl overflow-hidden flex flex-col max-h-[75vh]">
+      <div className={`bg-tech-card border border-tech-border rounded-xl overflow-hidden flex-col max-h-[75vh] ${selected ? 'flex' : 'hidden md:flex'}`}>
         {!selected ? (
           <p className="p-6 text-xs text-tech-muted text-center my-auto">Elige una conversación para leerla.</p>
         ) : (
           <>
             <div className="px-4 py-3 border-b border-tech-border flex items-center justify-between gap-2">
-              <div className="min-w-0">
+              <button onClick={() => setSelected(null)} className="md:hidden text-tech-muted shrink-0" aria-label="Volver a la lista"><Icons.ArrowLeft size={18} /></button>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-tech-text truncate">{selected.customer_name || selected.customer_email || (selected.user_id ? `Cliente ${selected.user_id}` : 'Visitante sin sesión')}</p>
                 <p className="text-[10px] text-tech-muted">{selected.customer_email ? `${selected.customer_email} · ` : ''}empezó {fmt(selected.created_at)}</p>
               </div>
@@ -105,15 +122,16 @@ export const AiChats: React.FC<{ adminToken: string; onOpenConversation: (id: nu
               )}
             </div>
             <div className="overflow-y-auto p-4 space-y-3">
-              {selected.messages.map((m, i) => (
+              {turns.length === 0 && <p className="text-xs text-tech-muted text-center">Esta conversación no tiene mensajes guardados.</p>}
+              {turns.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[90%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap break-words ${m.role === 'user' ? 'bg-tech-yellow text-black rounded-br-sm' : 'bg-tech-carbon border border-tech-border text-tech-text rounded-bl-sm'}`}>
                     {m.role === 'assistant' && <p className="text-[9px] font-mono uppercase text-tech-yellow mb-0.5">Asistente IA</p>}
-                    {m.content}
-                    {m.products?.length ? <p className="text-[10px] text-tech-muted mt-1.5">Productos mostrados: {m.products.join(', ')}</p> : null}
+                    {typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')}
+                    {Array.isArray(m.products) && m.products.length ? <p className="text-[10px] text-tech-muted mt-1.5">Productos mostrados: {m.products.join(', ')}</p> : null}
                     {m.outcome && OUTCOME[m.outcome] && <p className="text-[10px] text-amber-400 mt-1">{OUTCOME[m.outcome]}</p>}
                     {m.offeredHuman && <p className="text-[10px] text-tech-muted mt-1">Ofreció hablar con un asesor</p>}
-                    <p className={`text-[9px] mt-1 ${m.role === 'user' ? 'text-black/60' : 'text-tech-muted'}`}>{fmt(m.at)}</p>
+                    {m.at && <p className={`text-[9px] mt-1 ${m.role === 'user' ? 'text-black/60' : 'text-tech-muted'}`}>{fmt(m.at)}</p>}
                   </div>
                 </div>
               ))}
