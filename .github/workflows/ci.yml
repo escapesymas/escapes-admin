@@ -1,9 +1,10 @@
 name: CI — Escapes Admin
 
-# El push a main despliega en Coolify: esto tiene que estar verde antes.
+# El push a main despliega en Coolify: esto tiene que estar verde antes. Corre también en
+# mejoras/** porque scripts/factory/ship.sh espera a este CI en verde antes de pasar a main.
 on:
   push:
-    branches: [main]
+    branches: [main, 'mejoras/**']
   pull_request:
 
 jobs:
