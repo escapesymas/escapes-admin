@@ -137,11 +137,11 @@ export const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 pt-[var(--safe-top)] sm:pt-6 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-tech-card border border-tech-border rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-fade-in text-tech-text"
+        className="bg-tech-card border border-tech-border rounded-lg max-w-3xl w-full max-h-[calc(100dvh_-_var(--safe-top)_-_0.75rem)] sm:max-h-[90dvh] flex flex-col shadow-2xl animate-fade-in text-tech-text"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

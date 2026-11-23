@@ -53,7 +53,12 @@
    Solo `transform` y `opacity`; todo se apaga con prefers-reduced-motion. `animate-fade-in` lo usaban ~20 pantallas pero no
    estaba definido (no hacía nada): al definirlo, cada pestaña entra con un fundido corto.
    `--i` (índice) escalona la entrada de tarjetas, barras y listas. Las animaciones solo se reproducen al montar un elemento:
-   las actualizaciones en directo (cada pocos segundos) no las repiten. */
+   las actualizaciones en directo (cada pocos segundos) no las repiten.
+   **Fill `backwards`, nunca `both`/`forwards` en lo que anima `transform`** (22/11/2026): con `both` la animación se queda «aplicada» al terminar
+   (el `transform` computado es una matriz identidad, no `none`) y el elemento pasa a ser el bloque contenedor de sus hijos `fixed`. Como
+   `animate-fade-in` envuelve cada pestaña, todos los modales (`fixed inset-0`) medían la pestaña entera en vez de la ventana y salían
+   descolocados, en el móvil también (p. ej. «Recorrido del visitante»). El estado final de estas animaciones es el normal del elemento,
+   así que `backwards` (solo aplica el inicio durante el retardo) se ve igual y suelta el elemento al acabar. */
 :root {
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -64,13 +69,19 @@
 @keyframes motion-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes motion-line { from { opacity: 0; } to { opacity: 1; } }
 
+/* `space-y-*` y `space-x-*` ponen margen a TODOS los hijos, también a los overlays `fixed inset-0` de los modales, que se pintan como último
+   hijo de la raíz de la pestaña: el overlay bajaba 24 px (franja sin oscurecer arriba) y el modal quedaba descentrado. Misma especificidad que la
+   regla de Tailwind y más abajo en la hoja, así que gana. */
+[class*="space-y-"] > .fixed:not([hidden]) { margin-top: 0; }
+[class*="space-x-"] > .fixed:not([hidden]) { margin-left: 0; }
+
 @media (prefers-reduced-motion: no-preference) {
-  .animate-fade-in { animation: motion-fade 320ms var(--ease-out) both; }
-  .motion-rise { animation: motion-rise 420ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 12) * 45ms); }
+  .animate-fade-in { animation: motion-fade 320ms var(--ease-out) backwards; }
+  .motion-rise { animation: motion-rise 420ms var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 12) * 45ms); }
   /* Barras de las gráficas: crecen desde la base (SVG). */
-  .motion-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: motion-grow 650ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 40) * 14ms); }
+  .motion-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: motion-grow 650ms var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 40) * 14ms); }
   /* Barras horizontales (embudo, listados): crecen desde la izquierda. */
-  .motion-grow-x { transform-origin: 0 50%; animation: motion-grow-x 700ms var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 10) * 80ms); }
+  .motion-grow-x { transform-origin: 0 50%; animation: motion-grow-x 700ms var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 10) * 80ms); }
   /* Línea de comparación de las gráficas: aparece cuando las barras ya han crecido. */
   .motion-line { animation: motion-line 400ms ease-out 700ms both; }
 }

@@ -623,7 +623,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ adminToken, onOnline
                             >
                               {/* Tooltip flotante al pasar el ratón o pulsar en móvil */}
                               {isHovered && (
-                                <div className="absolute bottom-full mb-2 z-30 bg-tech-card/95 backdrop-blur-md border border-tech-border rounded p-2.5 shadow-2xl text-[10px] font-mono min-w-[130px] pointer-events-none animate-fade-in -translate-x-1/2 left-1/2 whitespace-nowrap">
+                                <div className="absolute bottom-full mb-2 z-30 bg-tech-card/95 backdrop-blur-md border border-tech-border rounded p-2.5 shadow-2xl text-[10px] font-mono min-w-[130px] pointer-events-none -translate-x-1/2 left-1/2 whitespace-nowrap">
                                   <div className="text-tech-yellow font-bold border-b border-tech-border pb-1 mb-1.5 flex items-center justify-between gap-2">
                                     <span>{point.label}</span>
                                     <span className="text-[8px] text-tech-muted font-normal">Detalle</span>
